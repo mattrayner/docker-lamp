@@ -3,9 +3,7 @@ MAINTAINER Matthew Rayner <mattrayner1@gmail.com>
 
 # Install packages
 ENV DEBIAN_FRONTEND noninteractive
-RUN apt-get update && apt-get -y install software-properties-common && sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4F4EA0AAE5267A6C && \
-  add-apt-repository -y ppa:ondrej/php && apt-get update && apt-get -y install python-software-properties && apt-get update
-RUN apt-get -y install supervisor git apache2 libapache2-mod-php5 mysql-server php5.6 php5.6-mysql pwgen php5.6-apc php5.6-mcrypt && \
+RUN apt-get update && apt-get -y install supervisor git apache2 libapache2-mod-php5 mysql-server php5 php5-mysql pwgen php5-mcrypt php5-gd && \
   echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
 # Add image configuration and scripts

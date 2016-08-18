@@ -25,7 +25,7 @@ Component | Version
 [Ubuntu][ubuntu] | `14.04`
 [Apache][apache] | `2.4.7`
 [MySQL][mysql] | `5.5.50`
-[PHP][php] | `5.6.24`
+[PHP][php] | `5.5.9`
 
 
 ## Using the image
@@ -36,6 +36,15 @@ docker run -d -p 80:80 mattrayner/lamp
 ````
 
 Now you should be able to visit the container at `http://localhost/` and see the welcome screen
+
+## Using with a Dockerfile
+```
+FROM mattrayner/lamp:latest
+RUN rm -fr /app
+ADD . /app
+EXPOSE 80 3306
+CMD ["/run.sh"]
+```
 
 ## Credits
 Inspiration for this container has come from [tutum-lamp][tutum-lamp].
