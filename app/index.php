@@ -44,11 +44,10 @@ $db = new PDO('mysql:host=localhost', 'root', null);
         </article>
         <section>
             <pre>
-Apache: <?php echo apache_get_version(); ?>
-<br/>
-PHP Version: <?php echo phpversion(); ?>
-<br/>
-MySQL Version: <?php echo $db->getAttribute( PDO::ATTR_SERVER_VERSION ); ?>
+OS: <?php echo php_uname('s'); ?><br/>
+Apache: <?php echo apache_get_version(); ?><br/>
+MySQL Version: <?php echo $db->getAttribute( PDO::ATTR_SERVER_VERSION ); ?><br/>
+PHP Version: <?php echo phpversion(); ?><span>&nbsp;</span>
             </pre>
         </section>
     </div>
