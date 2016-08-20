@@ -15,7 +15,10 @@ Docker-LAMP is a docker image that includes the phusion base image, [Apache][apa
 - [Using the image](#using-the-image)
   - [Building from source](#building-from-source)
   - [Using with a Dockerfile](#using-with-a-dockerfile)
-  - [MySQL Details](#mysql-details)
+  - [MySQL](#mysql)
+    - [Creating a database](#creating-a-database)
+      - [PHPMyAdmin](#phpmyadmin)
+      - [Command Line](#command-line)
 - [Adding your own content](#adding-your-own-content)
   - [Adding your own 'php'](#adding-your-own-php)
   - [Persisting your MySQL](#persisting-your-mysql)
@@ -50,12 +53,27 @@ FROM mattrayner/lamp:latest
 CMD ["/run.sh"]
 ```
 
-### MySQL Details
+### MySQL
 The default image comes with a `root` MySQL account that has no password. This account is only available locally though i.e. within your application. It is not availzble from outside your docker image.
 
 When you first run the image you'll see a message showing your `admin` user password. This user can be used locally and externally. Either by connecting to port 3306 using a tool like MySQL Workbench or Sequel Pro. If you need this login later, you can run `docker logs CONTAINER_ID` and you should see it at the top of the log.
 
 The image comes pre-installed with PHPMyAdmin available from `/phpmyadmin`. **NOTE:** you cannot use the `root` user with PHPMyAdmin. 
+
+#### Creating a database
+So your application needs a database - you have two options...
+1. PHPMyAdmin
+2. Command line
+
+##### PHPMyAdmin
+Simply log in with the details mentioned above and create a database
+
+##### Command Line
+First, get the ID of your running container with `docker ps`, then run the below command replacing `CONTAINER_ID` and `DATABASE_NAME` with your required values:
+
+```
+docker exec CONTAINER_ID  mysql -uroot -e "create database DATABASE_NAME"
+```
 
 
 ## Adding your own content
