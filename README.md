@@ -42,7 +42,7 @@ Component | Version
 ```
 docker build -t=mattrayner/lamp .
 docker run -d -p 80:80 -p 3306:3306 mattrayner/lamp
-````
+```
 
 ### Using with a Dockerfile
 ```

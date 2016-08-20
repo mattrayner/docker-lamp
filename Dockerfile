@@ -2,7 +2,7 @@
 FROM dgraziotin/lamp
 
 # Install an additional PHP library for use with Concrete5
-RUN apt-get update && apt-get -y install php5-gd
+RUN apt-get update && apt-get -y install php5-gd && apt-get -y upgrade && apt-get -y autoremove
 
 # Copy our updated 'app' directory
 COPY app /app
