@@ -12,5 +12,5 @@ test:
     - docker run -d -p 3000:80 mattrayner/lamp; sleep 10
     - 'curl --retry 10 --retry-delay 5 -v --silent http://localhost:3000 --stderr - | grep "OS: Linux<br/>"'
     - 'curl --retry 10 --retry-delay 5 -v --silent http://localhost:3000 --stderr - | grep "Apache: Apache/2.4.7 (Ubuntu)<br/>"'
-    - 'curl --retry 10 --retry-delay 5 -v --silent http://localhost:3000 --stderr - | grep "MySQL Version: 5.5.49-0ubuntu0.14.04.1<br/>"'
+    - 'curl --retry 10 --retry-delay 5 -v --silent http://localhost:3000 --stderr - | grep "MySQL Version: 5.5.50-0ubuntu0.14.04.1<br/>"'
     - 'curl --retry 10 --retry-delay 5 -v --silent http://localhost:3000 --stderr - | grep "PHP Version: 5.5.9-1ubuntu4.19<span>&nbsp;</span>"'
