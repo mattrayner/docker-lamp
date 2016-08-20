@@ -33,7 +33,7 @@ Docker-LAMP is a docker image that includes the phusion base image, [Apache][apa
 Component | Version
 ---|---
 [Apache][apache] | `2.4.7`
-[MySQL][mysql] | `5.5.49-0ubuntu0.14.04.1`
+[MySQL][mysql] | `5.5.50-0ubuntu0.14.04.1`
 [PHP][php] | `5.5.9-1ubuntu4.19`
 
 
@@ -42,7 +42,7 @@ Component | Version
 ```
 docker build -t=mattrayner/lamp .
 docker run -d -p 80:80 -p 3306:3306 mattrayner/lamp
-````
+```
 
 ### Using with a Dockerfile
 ```
