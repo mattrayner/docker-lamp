@@ -118,9 +118,8 @@ alias ld=launch-docker
 ```
 
 
-
 ## Credits
-Inspiration for this container has come from [tutum-lamp][tutum-lamp].
+This image is based on [dgraziotin/lamp][dgraziotin-lamp] with a few changes to make it compatible with Concrete5.
 
 
 [logo]: https://cdn.rawgit.com/mattrayner/docker-lamp/831976c022782e592b7e2758464b2a9efe3da042/docs/logo.svg
@@ -137,4 +136,4 @@ Inspiration for this container has come from [tutum-lamp][tutum-lamp].
 [shield-quay]: https://quay.io/repository/mattrayner/docker-lamp/status
 [shield-license]: https://img.shields.io/badge/license-MIT-blue.svg
 
-[tutum-lamp]: https://github.com/tutumcloud/lamp
+[dgraziotin-lamp]: https://github.com/dgraziotin/osx-docker-lamp

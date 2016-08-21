@@ -1,5 +1,6 @@
 .gitignore
 CHANGELOG.md
 circle.yml
+docs/
 LICENSE
 README.md
