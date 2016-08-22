@@ -5,12 +5,29 @@ machine:
 dependencies:
   override:
     - docker info
-    - docker build --no-cache -t=mattrayner/lamp .
+    - docker build --no-cache -t=mattrayner/lamp:latest-1604 -f Dockerfile .
+    - docker tag mattrayner/lamp:latest-1604 mattrayner/lamp:dev-1604
+    - docker tag mattrayner/lamp:latest-1604 mattrayner/lamp:latest
+    - docker tag mattrayner/lamp:latest-1604 mattrayner/lamp:dev
+    - docker build --no-cache -t=mattrayner/lamp:latest-1404 -f Dockerfile1404 .
+    - docker tag mattrayner/lamp:latest-1404 mattrayner/lamp:dev-1404
 
 test:
   override:
-    - docker run -d -p 3000:80 mattrayner/lamp; sleep 10
-    - 'curl --retry 10 --retry-delay 5 -v --silent http://localhost:3000 --stderr - | grep "OS: Linux<br/>"'
-    - 'curl --retry 10 --retry-delay 5 -v --silent http://localhost:3000 --stderr - | grep "Apache: Apache/2.4.7 (Ubuntu)<br/>"'
-    - 'curl --retry 10 --retry-delay 5 -v --silent http://localhost:3000 --stderr - | grep "MySQL Version: 5.5.50-0ubuntu0.14.04.1<br/>"'
-    - 'curl --retry 10 --retry-delay 5 -v --silent http://localhost:3000 --stderr - | grep "PHP Version: 5.5.9-1ubuntu4.19<span>&nbsp;</span>"'
+    - pushd  tests && . test.sh && popd
+
+deployment:
+  latest:
+    branch: master
+    commands:
+      - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
+      - docker push mattrayner/lamp:latest-1604
+      - docker push mattrayner/lamp:latest-1404
+      - docker push mattrayner/lamp:latest
+  dev:
+    branch: develop
+    commands:
+      - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
+      - docker push mattrayner/lamp:dev-1604
+      - docker push mattrayner/lamp:dev-1404
+      - docker push mattrayner/lamp:dev
