@@ -113,8 +113,23 @@ The above is our 'recommended' solution. It both adds your own PHP and persists 
 
 #### `.bash_profile` alias examples
 ```
-alias launch-docker='docker run -i -t -p "80:80" -p "3306:3306" -v ${PWD}/app:/app -v ${PWD}/mysql:/var/lib/mysql mattrayner/lamp:latest'
-alias ld=launch-docker
+# Create a helper function to launch docker with overrideable parameters
+function launchdockerwithparams {
+    APACHE_PORT=80
+    MYSQL_PORT=3306
+    
+    if ! [[ -z "$1" ]]; then
+        APACHE_PORT=$1
+    fi
+    
+    if ! [[ -z "$2" ]]; then
+        MYSQL_PORT=$2
+    fi
+
+    docker run -i -t -p "$APACHE_PORT:80" -p "$MYSQL_PORT:3306" -v ${PWD}/app:/app -v ${PWD}/mysql:/var/lib/mysql mattrayner/lamp:latest
+}
+alias launchdocker='launchdockerwithparams $1 $2'
+alias ld='launchdockerwithparams $1 $2'
 ```
 
 

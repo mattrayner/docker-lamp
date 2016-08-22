@@ -2,5 +2,6 @@
 CHANGELOG.md
 circle.yml
 docs/
+tests/
 LICENSE
 README.md
