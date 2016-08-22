@@ -113,14 +113,28 @@ The above is our 'recommended' solution. It both adds your own PHP and persists 
 
 #### `.bash_profile` alias examples
 ```
-alias launch-docker='docker run -i -t -p "80:80" -p "3306:3306" -v ${PWD}/app:/app -v ${PWD}/mysql:/var/lib/mysql mattrayner/lamp:latest'
-alias ld=launch-docker
+# Create a helper function to launch docker with overrideable parameters
+function launchdockerwithparams {
+    APACHE_PORT=80
+    MYSQL_PORT=3306
+    
+    if ! [[ -z "$1" ]]; then
+        APACHE_PORT=$1
+    fi
+    
+    if ! [[ -z "$2" ]]; then
+        MYSQL_PORT=$2
+    fi
+
+    docker run -i -t -p "$APACHE_PORT:80" -p "$MYSQL_PORT:3306" -v ${PWD}/app:/app -v ${PWD}/mysql:/var/lib/mysql mattrayner/lamp:latest
+}
+alias launchdocker='launchdockerwithparams $1 $2'
+alias ld='launchdockerwithparams $1 $2'
 ```
 
 
-
 ## Credits
-Inspiration for this container has come from [tutum-lamp][tutum-lamp].
+This image is based on [dgraziotin/lamp][dgraziotin-lamp] with a few changes to make it compatible with Concrete5.
 
 
 [logo]: https://cdn.rawgit.com/mattrayner/docker-lamp/831976c022782e592b7e2758464b2a9efe3da042/docs/logo.svg
@@ -137,4 +151,4 @@ Inspiration for this container has come from [tutum-lamp][tutum-lamp].
 [shield-quay]: https://quay.io/repository/mattrayner/docker-lamp/status
 [shield-license]: https://img.shields.io/badge/license-MIT-blue.svg
 
-[tutum-lamp]: https://github.com/tutumcloud/lamp
+[dgraziotin-lamp]: https://github.com/dgraziotin/osx-docker-lamp
