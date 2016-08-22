@@ -5,8 +5,12 @@ machine:
 dependencies:
   override:
     - docker info
-    - docker build --no-cache -t=mattrayner/lamp:latest-1604 -t=mattrayner/lamp:dev-1604 -t=mattrayner/lamp:latest  -t=mattrayner/lamp:dev -f Dockerfile .
-    - docker build --no-cache -t=mattrayner/lamp:latest-1404 -t=mattrayner/lamp:dev-1404 -f Dockerfile1404 .
+    - docker build --no-cache -t=mattrayner/lamp:latest-1604 -f Dockerfile .
+    - docker tag mattrayner/lamp:latest-1604 mattrayner/lamp:dev-1604
+    - docker tag mattrayner/lamp:latest-1604 mattrayner/lamp:latest
+    - docker tag mattrayner/lamp:latest-1604 mattrayner/lamp:dev
+    - docker build --no-cache -t=mattrayner/lamp:latest-1404 -f Dockerfile1404 .
+    - docker tag mattrayner/lamp:latest-1404 mattrayner/lamp:dev-1404
 
 test:
   override:
