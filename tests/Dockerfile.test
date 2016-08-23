@@ -1,0 +1,17 @@
+FROM phusion/baseimage
+MAINTAINER Matthew Rayner <matt@mattrayner.co.uk>
+
+RUN apt-get update && apt-get install -yq curl && apt-get clean
+
+WORKDIR /app
+
+COPY test.sh /app/test.sh
+COPY 1404.sh /app/1404.sh
+COPY 1604.sh /app/1604.sh
+COPY _helpers.sh /app/_helpers.sh
+COPY expected/1404.html /app/expected/1404.html
+COPY expected/1604.html /app/expected/1604.html
+
+RUN mkdir -p actual/
+
+CMD ["bash", "test.sh"]

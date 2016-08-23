@@ -1,0 +1,16 @@
+sut:
+  build: tests/.
+  dockerfile: Dockerfile.test
+  links:
+    - web1604
+    - web1404
+web1604:
+  build: .
+  dockerfile: Dockerfile
+  ports:
+    - "3000:80"
+web1404:
+  build: .
+  dockerfile: Dockerfile1404
+  ports:
+    - "3001:80"
