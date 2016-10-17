@@ -49,7 +49,8 @@ OS: <?php echo php_uname('s'); ?><br/>
 Apache: <?php echo apache_get_version(); ?><br/>
 MySQL Version: <?php echo $db->getAttribute( PDO::ATTR_SERVER_VERSION ); ?><br/>
 PHP Version: <?php echo phpversion(); ?><br/>
-phpMyAdmin Version: <?php echo getenv('PHPMYADMIN_VERSION'); ?><span>&nbsp;</span>
+phpMyAdmin Version: <?php echo getenv('PHPMYADMIN_VERSION'); ?><span>&nbsp;</span><br/>
+Composer Version: <?php echo system('composer -V'); ?>
             </pre>
         </section>
     </div>

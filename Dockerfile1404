@@ -30,8 +30,11 @@ RUN add-apt-repository -y ppa:ondrej/php && \
   apt-get -y autoremove && \
   echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
+# Update CLI PHP to use 5.6
+RUN ln -sfn /usr/bin/php5.6 /etc/alternatives/php
+
 # needed for phpMyAdmin
-run phpenmod mcrypt
+RUN phpenmod mcrypt
 
 # Add image configuration and scripts
 ADD supporting_files/start-apache2.sh /start-apache2.sh
@@ -54,6 +57,12 @@ RUN wget -O /tmp/phpmyadmin.tar.gz https://files.phpmyadmin.net/phpMyAdmin/${PHP
 RUN tar xfvz /tmp/phpmyadmin.tar.gz -C /var/www
 RUN ln -s /var/www/phpMyAdmin-${PHPMYADMIN_VERSION}-all-languages /var/www/phpmyadmin
 RUN mv /var/www/phpmyadmin/config.sample.inc.php /var/www/phpmyadmin/config.inc.php
+
+# Add composer
+RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" && \
+    php composer-setup.php && \
+    php -r "unlink('composer-setup.php');" && \
+    mv composer.phar /usr/local/bin/composer
 
 ENV MYSQL_PASS:-$(pwgen -s 12 1)
 # config to enable .htaccess
