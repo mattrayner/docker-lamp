@@ -44,6 +44,12 @@ RUN chmod 755 /*.sh
 ADD supporting_files/supervisord-apache2.conf /etc/supervisor/conf.d/supervisord-apache2.conf
 ADD supporting_files/supervisord-mysqld.conf /etc/supervisor/conf.d/supervisord-mysqld.conf
 
+# Set PHP timezones to Europe/London
+sudo timedatectl set-timezone Europe/London
+sudo sed -i "s/;date.timezone =/date.timezone = Europe\/London/g" /etc/php5/apache2/php.ini
+sudo sed -i "s/;date.timezone =/date.timezone = Europe\/London/g" /etc/php5/cli/php.ini
+sudo sed -i "s/;date.timezone =/date.timezone = Europe\/London/g" /etc/php5/cgi/php.ini
+
 # Remove pre-installed database
 RUN rm -rf /var/lib/mysql
 
