@@ -14,4 +14,4 @@ COPY expected/1604.html /app/expected/1604.html
 
 RUN mkdir -p actual/
 
-CMD ["bash", "test.sh"] 
+CMD ["bash", "test.sh"]
