@@ -1,7 +1,7 @@
 FROM arm64v8/ubuntu:16.04
 
-MAINTAINER Matthew Rayner <hellp@rayner.io>
-ENV REFRESHED_AT 2018-08-02
+MAINTAINER Matthew Rayner <hello@rayner.io>
+ENV REFRESHED_AT 2018-08-21
 
 ENV DOCKER_USER_ID 501
 ENV DOCKER_USER_GID 20

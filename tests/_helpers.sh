@@ -11,7 +11,6 @@ function checkstatus {
 
 # Test our image, first curling our container and then checking the result against our expectations
 function testimage {
-    echo
     echo "=> Querying image ($1)"
     curl --retry 10 --retry-delay 5 -o actual/$1.html $2 --stderr -
     checkstatus $?
@@ -19,4 +18,5 @@ function testimage {
     echo "=> Checking against expected values ($1)"
     diff -b actual/$1.html expected/$1.html
     checkstatus $?
+    echo
 }
