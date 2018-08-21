@@ -1,11 +1,9 @@
-FROM phusion/baseimage
-MAINTAINER Matthew Rayner <matt@mattrayner.co.uk>
-ENV REFRESHED_AT 2016-08-21
+FROM arm64v8/ubuntu:16.04
 
-# based on dgraziotin/lamp
-# MAINTAINER Daniel Graziotin <daniel@ineed.coffee>
+MAINTAINER Matthew Rayner <hellp@rayner.io>
+ENV REFRESHED_AT 2018-08-02
 
-ENV DOCKER_USER_ID 501 
+ENV DOCKER_USER_ID 501
 ENV DOCKER_USER_GID 20
 
 ENV BOOT2DOCKER_ID 1000
@@ -22,16 +20,14 @@ RUN groupmod -g ${BOOT2DOCKER_GID} staff
 
 # Install packages
 ENV DEBIAN_FRONTEND noninteractive
-RUN add-apt-repository -y ppa:ondrej/php && \
+RUN apt-get update && \
+  apt-get install -y software-properties-common python-software-properties && \
   apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4F4EA0AAE5267A6C && \
   apt-get update && \
   apt-get -y upgrade && \
-  apt-get -y install supervisor wget git apache2 php-xdebug libapache2-mod-php5.6 mysql-server php5.6 php5.6-mysql pwgen php5.6-apc php5.6-mcrypt php5.6-gd php5.6-xml php5.6-mbstring php5.6-gettext zip unzip php5.6-zip curl php5.6-curl && \
+  apt-get -y install supervisor wget git apache2 php-xdebug libapache2-mod-php mariadb-server php-mysql pwgen php-apcu php7.0-mcrypt php-gd php-xml php-mbstring php-gettext zip unzip php-zip curl php-curl && \
   apt-get -y autoremove && \
   echo "ServerName localhost" >> /etc/apache2/apache2.conf
-
-# Update CLI PHP to use 5.6
-RUN ln -sfn /usr/bin/php5.6 /etc/alternatives/php
 
 # needed for phpMyAdmin
 RUN phpenmod mcrypt
@@ -43,14 +39,13 @@ ADD supporting_files/run.sh /run.sh
 RUN chmod 755 /*.sh
 ADD supporting_files/supervisord-apache2.conf /etc/supervisor/conf.d/supervisord-apache2.conf
 ADD supporting_files/supervisord-mysqld.conf /etc/supervisor/conf.d/supervisord-mysqld.conf
-ADD supporting_files/mysqld_innodb.cnf /etc/mysql/conf.d/mysqld_innodb.cnf
 
 # Allow mysql to bind on 0.0.0.0
 RUN sed -i "s/.*bind-address.*/bind-address = 0.0.0.0/" /etc/mysql/my.cnf
 
 # Set PHP timezones to Europe/London
-RUN sed -i "s/;date.timezone =/date.timezone = Europe\/London/g" /etc/php/5.6/apache2/php.ini
-RUN sed -i "s/;date.timezone =/date.timezone = Europe\/London/g" /etc/php/5.6/cli/php.ini
+RUN sed -i "s/;date.timezone =/date.timezone = Europe\/London/g" /etc/php/7.0/apache2/php.ini
+RUN sed -i "s/;date.timezone =/date.timezone = Europe\/London/g" /etc/php/7.0/cli/php.ini
 
 # Remove pre-installed database
 RUN rm -rf /var/lib/mysql
