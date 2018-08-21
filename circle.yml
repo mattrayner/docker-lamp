@@ -17,19 +17,35 @@ deployment:
     branch: master
     commands:
       - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
-      - docker tag ci_web1604:latest mattrayner/lamp:latest
-      - docker tag ci_web1604:latest mattrayner/lamp:latest-1604
-      - docker tag ci_web1404:latest mattrayner/lamp:latest-1404
+      - docker tag ci_web1604-php5:latest mattrayner/lamp:latest
+      - docker tag ci_web1604-php5:latest mattrayner/lamp:latest-1604
+      - docker tag ci_web1604-php5:latest mattrayner/lamp:latest-1604-php5
+      - docker tag ci_web1604-php7:latest mattrayner/lamp:latest-1604-php7
+      - docker tag ci_web1404-php5:latest mattrayner/lamp:latest-1404
+      - docker tag ci_web1404-php5:latest mattrayner/lamp:latest-1404-php5
+      - docker tag ci_web1404-php7:latest mattrayner/lamp:latest-1404-php7
       - docker push mattrayner/lamp:latest
       - docker push mattrayner/lamp:latest-1604
+      - docker push mattrayner/lamp:latest-1604-php5
+      - docker push mattrayner/lamp:latest-1604-php7
       - docker push mattrayner/lamp:latest-1404
+      - docker push mattrayner/lamp:latest-1404-php5
+      - docker push mattrayner/lamp:latest-1404-php7
   dev:
     branch: develop
     commands:
       - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
-      - docker tag ci_web1604:latest mattrayner/lamp:dev
-      - docker tag ci_web1604:latest mattrayner/lamp:dev-1604
-      - docker tag ci_web1404:latest mattrayner/lamp:dev-1404
-      - docker push mattrayner/lamp:dev-1604
-      - docker push mattrayner/lamp:dev-1404
+      - docker tag ci_web1604-php5:latest mattrayner/lamp:dev
+      - docker tag ci_web1604-php5:latest mattrayner/lamp:dev-1604
+      - docker tag ci_web1604-php5:latest mattrayner/lamp:dev-1604-php5
+      - docker tag ci_web1604-php7:latest mattrayner/lamp:dev-1604-php7
+      - docker tag ci_web1404-php5:latest mattrayner/lamp:dev-1404
+      - docker tag ci_web1404-php5:latest mattrayner/lamp:dev-1404-php5
+      - docker tag ci_web1404-php7:latest mattrayner/lamp:dev-1404-php7
       - docker push mattrayner/lamp:dev
+      - docker push mattrayner/lamp:dev-1604
+      - docker push mattrayner/lamp:dev-1604-php5
+      - docker push mattrayner/lamp:dev-1604-php7
+      - docker push mattrayner/lamp:dev-1404
+      - docker push mattrayner/lamp:dev-1404-php5
+      - docker push mattrayner/lamp:dev-1404-php7
