@@ -15,7 +15,7 @@ With both Ubuntu **16.04** and **14.04** images on the latest-1604 and latest-14
 
 
 - [Introduction](#introduction)
-- [Component Versions](#component-versions)
+- [Image Versions](#image-versions)
 - [Using the image](#using-the-image)
   - [On the command line](#on-the-command-line)
   - [With a Dockerfile](#with-a-dockerfile)
