@@ -1,12 +1,14 @@
 #!/bin/bash
 source _helpers.sh
 
+echo
 echo "Testing mattrayner/lamp"
 echo "=> Sleeping to allow boot of containers"
-sleep 10
+sleep 15
 
-echo "=> Testing 16.04 image"
+echo
+echo "=> Testing 16.04 images"
 . 1604.sh
 
-echo "=> Testing 14.04 image"
+echo "=> Testing 14.04 images"
 . 1404.sh
