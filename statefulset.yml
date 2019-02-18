@@ -27,13 +27,13 @@ spec:
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
         volumeMounts:
-        - mountPath: /var/www/html
+        - mountPath: /var/www
           name: CLIENT-ENV-data
       initContainers:
       - command:
         - sh
         - -c
-        - chown -R 33:33 /var/www/html && chmod -R 777 /var/www/html
+        - chown -R 33:33 /var/www && chmod -R 777 /var/www
         image: busybox
         imagePullPolicy: Always
         name: fix-permissions-APPID
@@ -41,7 +41,7 @@ spec:
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
         volumeMounts:
-        - mountPath: /var/www/html
+        - mountPath: /var/www
           name: CLIENT-ENV-data
       dnsPolicy: ClusterFirst
       restartPolicy: Always
