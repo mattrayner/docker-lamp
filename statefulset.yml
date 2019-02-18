@@ -1,0 +1,54 @@
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  labels:
+    app: CLIENT-ENV-APPID
+  name: CLIENT-ENV-APPID-workload
+  namespace: default
+spec:
+  serviceName: CLIENT-ENV-APPID-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: CLIENT-ENV-APPID
+  template:
+    metadata:
+      labels:
+        app: CLIENT-ENV-APPID
+    spec:
+      containers:
+      - image: DEPLOY_LAMP_IMAGE
+        imagePullPolicy: Always
+        name: CLIENT-ENV-APPID
+        ports:
+        - containerPort: 80
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /var/www/html
+          name: CLIENT-ENV-data
+      initContainers:
+      - command:
+        - sh
+        - -c
+        - chown -R 33:33 /var/www/html && chmod -R 777 /var/www/html
+        image: busybox
+        imagePullPolicy: Always
+        name: fix-permissions-APPID
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /var/www/html
+          name: CLIENT-ENV-data
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 0
+      volumes:
+      - name: CLIENT-ENV-data
+        persistentVolumeClaim:
+          claimName: CLIENT-ENV-APPID-pvc
+  updateStrategy:
+    type: RollingUpdate
