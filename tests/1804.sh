@@ -1,4 +1,4 @@
 #!/bin/bash
 source _helpers.sh
 
-testimage 1604-php7 web1604-php7
+testimage 1804-php7 web1804-php7
