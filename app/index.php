@@ -45,7 +45,7 @@ $db = new PDO('mysql:host=localhost', 'root', null);
         </article>
         <section>
             <pre>
-OS: <?php echo php_uname(); ?><br/>
+OS: <?php echo php_uname('s'); ?><br/>
 Apache: <?php echo apache_get_version(); ?><br/>
 MySQL Version: <?php echo $db->getAttribute( PDO::ATTR_SERVER_VERSION ); ?><br/>
 PHP Version: <?php echo phpversion(); ?><br/>

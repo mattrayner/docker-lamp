@@ -8,18 +8,18 @@ sut:
 
 web1804-php7:
   build: .
-  dockerfile: ./1804/Dockerfile-php7
+  dockerfile: ./1804/Dockerfile
   ports:
     - "3000:80"
 
 web1604-php7:
   build: .
-  dockerfile: ./1604/Dockerfile-php7
+  dockerfile: ./1604/Dockerfile
   ports:
     - "3001:80"
 
 web1404-php7:
   build: .
-  dockerfile: ./1404/Dockerfile-php7
+  dockerfile: ./1404/Dockerfile
   ports:
     - "3002:80"
