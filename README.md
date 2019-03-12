@@ -56,7 +56,7 @@ Designed to be a single interface that just 'gets out of your way', and works on
 There are 4 main 'versions' of the docker image. The table below shows the different tags you can use, along with the PHP, MySQL and Apache versions that come with it.
 
 Component | `latest-1404` | `latest-1604` | `latest-1804`
----|---|---|---|---
+---|---|---|---
 [Apache][apache] | `2.4.7` | `2.4.18` | `2.4.18`
 [MySQL][mysql] | `5.5.61` | `5.7.23` | `5.7.23`
 [PHP][php] | `7.2.9` | `7.2.9` | `7.2.9`
