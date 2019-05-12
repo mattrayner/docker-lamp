@@ -1,6 +1,6 @@
 FROM phusion/baseimage:0.9.18
 MAINTAINER Matthew Rayner <hello@rayner.io>
-ENV REFRESHED_AT 2018-08-21
+ENV REFRESHED_AT 2019-03-12
 
 # based on dgraziotin/lamp
 # MAINTAINER Daniel Graziotin <daniel@ineed.coffee>
@@ -10,6 +10,8 @@ ENV DOCKER_USER_GID 20
 
 ENV BOOT2DOCKER_ID 1000
 ENV BOOT2DOCKER_GID 50
+
+ENV PHPMYADMIN_VERSION=4.8.5
 
 # Tweaks to give Apache/PHP write permissions to the app
 RUN usermod -u ${BOOT2DOCKER_ID} www-data && \
@@ -22,16 +24,21 @@ RUN groupmod -g ${BOOT2DOCKER_GID} staff
 
 # Install packages
 ENV DEBIAN_FRONTEND noninteractive
-RUN add-apt-repository -y ppa:ondrej/php && \
+RUN echo exit 0 > /usr/sbin/policy-rc.d && \
+  LC_ALL=C.UTF-8 add-apt-repository -y ppa:ondrej/php && \
   apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4F4EA0AAE5267A6C && \
   apt-get update && \
   apt-get -y upgrade && \
- apt-get -y install supervisor wget git apache2 php-xdebug libapache2-mod-php mysql-server php-mysql pwgen php-apcu php7.0-mcrypt php-gd php-xml php-mbstring php-gettext zip unzip php-zip curl php-curl && \
+  apt-get install -y apache2-mpm-prefork && \
+  a2dismod mpm_prefork && \
+  a2dismod mpm_event && \
+  apt-get -y install supervisor wget git apache2 php-xdebug libapache2-mod-php mysql-server php-mysql pwgen php-apcu php7.1-mcrypt php-gd php-xml php-mbstring php-gettext zip unzip php-zip curl php-curl && \
   apt-get -y autoremove && \
   echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
 # needed for phpMyAdmin
-RUN phpenmod mcrypt
+RUN sudo ln -s /etc/php/7.1/mods-available/mcrypt.ini /etc/php/7.3/mods-available/ && \
+  phpenmod mcrypt
 
 # Add image configuration and scripts
 ADD supporting_files/start-apache2.sh /start-apache2.sh
@@ -46,8 +53,8 @@ ADD supporting_files/mysqld_innodb.cnf /etc/mysql/conf.d/mysqld_innodb.cnf
 RUN sed -i "s/.*bind-address.*/bind-address = 0.0.0.0/" /etc/mysql/my.cnf
 
 # Set PHP timezones to Europe/London
-RUN sed -i "s/;date.timezone =/date.timezone = Europe\/London/g" /etc/php/7.2/apache2/php.ini
-RUN sed -i "s/;date.timezone =/date.timezone = Europe\/London/g" /etc/php/7.2/cli/php.ini
+RUN sed -i "s/;date.timezone =/date.timezone = Europe\/London/g" /etc/php/7.3/apache2/php.ini
+RUN sed -i "s/;date.timezone =/date.timezone = Europe\/London/g" /etc/php/7.3/cli/php.ini
 
 # Remove pre-installed database
 RUN rm -rf /var/lib/mysql
@@ -57,7 +64,6 @@ ADD supporting_files/create_mysql_users.sh /create_mysql_users.sh
 RUN chmod 755 /*.sh
 
 # Add phpmyadmin
-ENV PHPMYADMIN_VERSION=4.8.2
 RUN wget -O /tmp/phpmyadmin.tar.gz https://files.phpmyadmin.net/phpMyAdmin/${PHPMYADMIN_VERSION}/phpMyAdmin-${PHPMYADMIN_VERSION}-all-languages.tar.gz
 RUN tar xfvz /tmp/phpmyadmin.tar.gz -C /var/www
 RUN ln -s /var/www/phpMyAdmin-${PHPMYADMIN_VERSION}-all-languages /var/www/phpmyadmin

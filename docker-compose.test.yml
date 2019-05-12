@@ -2,31 +2,24 @@ sut:
   build: tests/.
   dockerfile: Dockerfile.test
   links:
-    - web1604-php5
+    - web1804-php7
     - web1604-php7
-    - web1404-php5
     - web1404-php7
 
-web1604-php5:
+web1804-php7:
   build: .
-  dockerfile: ./1604/Dockerfile-php5
+  dockerfile: ./1804/Dockerfile
   ports:
     - "3000:80"
 
 web1604-php7:
   build: .
-  dockerfile: ./1604/Dockerfile-php7
+  dockerfile: ./1604/Dockerfile
   ports:
     - "3001:80"
 
-web1404-php5:
-  build: .
-  dockerfile: ./1404/Dockerfile-php5
-  ports:
-    - "3002:80"
-
 web1404-php7:
   build: .
-  dockerfile: ./1404/Dockerfile-php7
+  dockerfile: ./1404/Dockerfile
   ports:
-    - "3003:80"
+    - "3002:80"

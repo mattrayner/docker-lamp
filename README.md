@@ -1,7 +1,7 @@
 # ![Docker-LAMP][logo]
-Docker-LAMP is a set of docker images that include the phusion baseimage (both 14.04 and 16.04 varieties), along with a LAMP stack ([Apache][apache], [MySQL][mysql] and [PHP][php]) all in one handy package.
+Docker-LAMP is a set of docker images that include the phusion baseimage (14.04, 16.04 and 18.04 varieties), along with a LAMP stack ([Apache][apache], [MySQL][mysql] and [PHP][php]) all in one handy package.
 
-With both Ubuntu **16.04** and **14.04** images on the latest-1604 and latest-1404 tags, Docker-LAMP is flexible enough to use with all of your LAMP projects.
+With Ubuntu **18.04**, **16.04** and **14.04** images on the latest-1804, latest-1604 and latest-1404 tags, Docker-LAMP is flexible enough to use with all of your LAMP projects.
 
 [![Build Status][shield-build-status]][info-build-status]
 [![Docker Hub][shield-docker-hub]][info-docker-hub]
@@ -51,36 +51,35 @@ To complicate things even further I needed an image, or actually two, that would
 Designed to be a single interface that just 'gets out of your way', and works on 14.04 and 16.04 with php 5 and 7. You can move between all 4 images without changing how you work with Docker.
 
 ## Image Versions
+> **NOTE:** [PHP 5.6 is end of life][end-of-life], so the PHP 5 images `mattrayner/lamp:latest-1404-php5` and `mattrayner/lamp:latest-1604-php5` will not receive any updates. Although these images will stay on Docker Hub, we **strongly** recommend updating you applications to PHP7.
+
 There are 4 main 'versions' of the docker image. The table below shows the different tags you can use, along with the PHP, MySQL and Apache versions that come with it.
 
-Component | `latest-1404-php5` | `latest-1604-php5` | `latest-1404-php7` | `latest-1604-php7`
----|---|---|---|---
-[Apache][apache] | `2.4.7` | `2.4.18` | `2.4.7` | `2.4.18`
-[MySQL][mysql] | `5.5.61` | `5.7.23` | `5.5.61` | `5.7.23`
-[PHP][php] | `5.6.37` | `5.6.37` | `7.2.9` | `7.2.9`
-[phpMyAdmin][phpmyadmin] | `4.8.2` | `4.8.2` | `4.8.2` | `4.8.2`
+Component | `latest-1404` | `latest-1604` | `latest-1804`
+---|---|---|---
+[Apache][apache] | `2.4.7` | `2.4.29` | `2.4.18`
+[MySQL][mysql] | `5.5.62` | `5.7.25` | `5.7.25`
+[PHP][php] | `7.3.3` | `7.3.3` | `7.3.3`
+[phpMyAdmin][phpmyadmin] | `4.8.5` | `4.8.5` | `4.8.5`
 
 
 ## Using the image
 ### On the command line
 This is the quickest way
 ```bash
-# Launch a 16.04 (php5) based image
+# Launch a 18.04 based image
+docker run -p "80:80" -v ${PWD}/app:/app mattrayner/lamp:latest-1804
+
+# Launch a 16.04 based image
 docker run -p "80:80" -v ${PWD}/app:/app mattrayner/lamp:latest-1604
 
-# Launch a 14.04 (php5) based image
+# Launch a 14.04 based image
 docker run -p "80:80" -v ${PWD}/app:/app mattrayner/lamp:latest-1404
-
-# Launch a 16.04 (php7) based image
-docker run -p "80:80" -v ${PWD}/app:/app mattrayner/lamp:latest-1604-php7
-
-# Launch a 14.04 (php7) based image
-docker run -p "80:80" -v ${PWD}/app:/app mattrayner/lamp:latest-1404-php7
 ```
 
 ### With a Dockerfile
 ```docker
-FROM mattrayner/lamp:latest-1604
+FROM mattrayner/lamp:latest-1804
 
 # Your custom commands
 
@@ -125,17 +124,17 @@ The below examples assume the following project layout and that you are running 
 In english, your project should contain a folder called `app` containing all of your app's code. That's pretty much it.
 
 ### Adding your app
-The below command will run the docker image `mattrayner/lamp` interactively, exposing port `80` on the host machine with port `80` on the docker container. It will then create a volume linking the `app/` directory within your project to the `/app` directory on the container. This is where Apache is expecting your PHP to live.
+The below command will run the docker image `mattrayner/lamp:latest` interactively, exposing port `80` on the host machine with port `80` on the docker container. It will then create a volume linking the `app/` directory within your project to the `/app` directory on the container. This is where Apache is expecting your PHP to live.
 ```bash
-docker run -i -t -p "80:80" -v ${PWD}/app:/app mattrayner/lamp
+docker run -i -t -p "80:80" -v ${PWD}/app:/app mattrayner/lamp:latest
 ```
 
 ### Persisting your MySQL
-The below command will run the docker image `mattrayner/lamp`, creating a `mysql/` folder within your project. This folder will be linked to `/var/lib/mysql` where all of the MySQL files from container lives. You will now be able to stop/start the container and keep your database changes.
+The below command will run the docker image `mattrayner/lamp:latest`, creating a `mysql/` folder within your project. This folder will be linked to `/var/lib/mysql` where all of the MySQL files from container lives. You will now be able to stop/start the container and keep your database changes.
 
 You may also add `-p 3306:3306` after `-p 80:80` to expose the mysql sockets on your host machine. This will allow you to connect an external application such as SequelPro or MySQL Workbench.
 ```bash
-docker run -i -t -p "80:80" -v ${PWD}/mysql:/var/lib/mysql mattrayner/lamp
+docker run -i -t -p "80:80" -v ${PWD}/mysql:/var/lib/mysql mattrayner/lamp:latest
 ```
 
 ### Doing both
@@ -189,9 +188,10 @@ ldi 3000 3306
 git clone https://github.com/mattrayner/docker-lamp.git
 cd docker-lamp
 
-# Build both the 16.04 image and the 14.04 php5 images
-docker build -t=mattrayner/lamp:latest -f ./1604/Dockerfile-php5 .
-docker build -t=mattrayner/lamp:latest-1404 -f ./1404/Dockerfile-php5 .
+# Build the 18.04, 16.04 image and the 14.04 images
+docker build -t=mattrayner/lamp:latest -f ./1804/Dockerfile-php7 .
+docker build -t=mattrayner/lamp:latest-1604 -f ./1604/Dockerfile-php7 .
+docker build -t=mattrayner/lamp:latest-1404 -f ./1404/Dockerfile-php7 .
 
 # Run the 14.04 image as a container
 docker run -p "3000:80" mattrayner/lamp:latest-1404 -d
@@ -218,7 +218,7 @@ So what does this command do?
 First, build that latest version of our docker-compose images.
 
 #### `docker-compose -f docker-compose.test.yml -p ci up -d;`
-Launch our docker containers (`web1604`, `web1404` and `sut` or *system under tests*) in daemon mode.
+Launch our docker containers (`web1804`, `web1604`, `web1404` and `sut` or *system under tests*) in daemon mode.
 
 #### `docker logs -f ci_sut_1;`
 Display all of the logging output from the `sut` container (extremely useful for debugging)
@@ -230,7 +230,7 @@ Report back the status code that the `sut` container ended with.
 ## Inspiration
 This image was originally based on [dgraziotin/lamp][dgraziotin-lamp], with a few changes to make it compatible with the Concrete5 CMS.
 
-I also changed the setup to create ubuntu (well, baseimage, but you get what I'm saying) 14.04 and 16.04 images so that this project could be as useful as possible to as many people as possible.
+I also changed the setup to create ubuntu (well, baseimage, but you get what I'm saying) images so that this project could be as useful as possible to as many people as possible.
 
 
 ## Contributing
@@ -254,6 +254,8 @@ Docker-LAMP is licensed under the [Apache 2.0 License][info-license].
 [mysql]: https://www.mysql.com/
 [php]: http://php.net/
 [phpmyadmin]: https://www.phpmyadmin.net/
+
+[end-of-life]: http://php.net/supported-versions.php
 
 [info-build-status]: https://circleci.com/gh/mattrayner/docker-lamp
 [info-docker-hub]: https://hub.docker.com/r/mattrayner/lamp
