@@ -1,4 +1,4 @@
-FROM phusion/baseimage:0.11
+FROM phusion/baseimage:0.10.2
 MAINTAINER Matthew Rayner <hello@rayner.io>
 ENV REFRESHED_AT 2019-03-12
 
