@@ -42,12 +42,12 @@ jobs:
 
 workflows:
   version: 2
-  build-and-deploy:
+  test-and-deploy:
     jobs:
-      - build
+      - test
       - deploy:
           requires:
-            - build
+            - test
           filters:
             branches:
               only: master
