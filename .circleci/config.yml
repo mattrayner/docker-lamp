@@ -18,26 +18,33 @@ jobs:
       - checkout
 
       # Login to docker
-      - run: docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
-
-      # Build our images
-      - run: docker-compose -f docker-compose.test.yml -p ci build
+#      - run: docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
+#
+#      # Build our images
+#      - run: docker-compose -f docker-compose.test.yml -p ci build
 
       # Tag ahead of release
       - run: |
+          docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
+          docker-compose -f docker-compose.test.yml -p ci build
           docker tag ci_web1804-php7:latest mattrayner/lamp:latest
           docker tag ci_web1804-php7:latest mattrayner/lamp:latest-1804
           docker tag ci_web1804-php7:latest mattrayner/lamp:latest-1804-php7
           docker tag ci_web1604-php7:latest mattrayner/lamp:latest-1604
           docker tag ci_web1604-php7:latest mattrayner/lamp:latest-1604-php7
-
-      # Push images
-      - run: |
           docker push mattrayner/lamp:latest
           docker push mattrayner/lamp:latest-1804
           docker push mattrayner/lamp:latest-1804-php7
           docker push mattrayner/lamp:latest-1604
           docker push mattrayner/lamp:latest-1604-php7
+
+      # Push images
+#      - run: |
+#          docker push mattrayner/lamp:latest
+#          docker push mattrayner/lamp:latest-1804
+#          docker push mattrayner/lamp:latest-1804-php7
+#          docker push mattrayner/lamp:latest-1604
+#          docker push mattrayner/lamp:latest-1604-php7
 
 workflows:
   version: 2
