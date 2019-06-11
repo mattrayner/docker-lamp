@@ -9,7 +9,7 @@ jobs:
           docker-compose -f docker-compose.test.yml -p ci up -d
           cd tests && ./test.sh
 
-  deploy_dev:
+  deploy:
     machine: true
     steps:
       - checkout
