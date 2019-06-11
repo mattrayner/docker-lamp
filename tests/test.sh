@@ -4,7 +4,7 @@ source _helpers.sh
 echo
 echo "Testing mattrayner/lamp"
 echo "=> Sleeping to allow boot of containers"
-sleep 15
+sleep 60
 
 mkdir actual
 
