@@ -8,22 +8,11 @@ jobs:
           docker-compose -f docker-compose.test.yml -p ci build
           docker-compose -f docker-compose.test.yml -p ci up -d
           cd tests && ./test.sh
-          echo "--------------------"
-          'docker logs -f ci_sut_1; echo "Exited with status code: $(docker wait ci_sut_1)"; exit $(docker wait ci_sut_1)'
-#      - run: 'docker logs -f ci_sut_1; echo "Exited with status code: $(docker wait ci_sut_1)"; exit $(docker wait ci_sut_1)'
 
   deploy_dev:
     machine: true
     steps:
       - checkout
-
-      # Login to docker
-#      - run: docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
-#
-#      # Build our images
-#      - run: docker-compose -f docker-compose.test.yml -p ci build
-
-      # Tag ahead of release
       - run: |
           docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
           docker-compose -f docker-compose.test.yml -p ci build
@@ -37,14 +26,6 @@ jobs:
           docker push mattrayner/lamp:latest-1804-php7
           docker push mattrayner/lamp:latest-1604
           docker push mattrayner/lamp:latest-1604-php7
-
-      # Push images
-#      - run: |
-#          docker push mattrayner/lamp:latest
-#          docker push mattrayner/lamp:latest-1804
-#          docker push mattrayner/lamp:latest-1804-php7
-#          docker push mattrayner/lamp:latest-1604
-#          docker push mattrayner/lamp:latest-1604-php7
 
 workflows:
   version: 2
