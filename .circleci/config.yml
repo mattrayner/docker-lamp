@@ -27,6 +27,24 @@ jobs:
           docker push mattrayner/lamp:latest-1604
           docker push mattrayner/lamp:latest-1604-php7
 
+  deploy-tags:
+    machine: true
+    steps:
+      - checkout
+      - run: |
+          docker login -u $DOCKER_USER -p $DOCKER_PASS
+          docker-compose -f docker-compose.test.yml -p ci build
+          docker tag ci_web1804-php7:latest mattrayner/lamp:$CIRCLE_TAG
+          docker tag ci_web1804-php7:latest mattrayner/lamp:$CIRCLE_TAG-1804
+          docker tag ci_web1804-php7:latest mattrayner/lamp:$CIRCLE_TAG-1804-php7
+          docker tag ci_web1604-php7:latest mattrayner/lamp:$CIRCLE_TAG-1604
+          docker tag ci_web1604-php7:latest mattrayner/lamp:$CIRCLE_TAG-1604-php7
+          docker push mattrayner/lamp:$CIRCLE_TAG
+          docker push mattrayner/lamp:$CIRCLE_TAG-1804
+          docker push mattrayner/lamp:$CIRCLE_TAG-1804-php7
+          docker push mattrayner/lamp:$CIRCLE_TAG-1604
+          docker push mattrayner/lamp:$CIRCLE_TAG-1604-php7
+
 workflows:
   version: 2
   test-and-deploy:
@@ -38,3 +56,7 @@ workflows:
           filters:
             branches:
               only: master
+      - deploy-tags:
+          filters:
+            tags:
+              only: /.*/
