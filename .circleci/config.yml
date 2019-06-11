@@ -27,8 +27,6 @@ jobs:
           docker tag ci_web1804-php7:latest mattrayner/lamp:latest-1804-php7
           docker tag ci_web1604-php7:latest mattrayner/lamp:latest-1604
           docker tag ci_web1604-php7:latest mattrayner/lamp:latest-1604-php7
-          docker tag ci_web1404-php7:latest mattrayner/lamp:latest-1404
-          docker tag ci_web1404-php7:latest mattrayner/lamp:latest-1404-php7
 
       # Push images
       - run: |
@@ -37,8 +35,6 @@ jobs:
           docker push mattrayner/lamp:latest-1804-php7
           docker push mattrayner/lamp:latest-1604
           docker push mattrayner/lamp:latest-1604-php7
-          docker push mattrayner/lamp:latest-1404
-          docker push mattrayner/lamp:latest-1404-php7
 
 workflows:
   version: 2

@@ -1,13 +1,11 @@
 # ![Docker-LAMP][logo]
 Docker-LAMP is a set of docker images that include the phusion baseimage (14.04, 16.04 and 18.04 varieties), along with a LAMP stack ([Apache][apache], [MySQL][mysql] and [PHP][php]) all in one handy package.
 
-With Ubuntu **18.04**, **16.04** and **14.04** images on the latest-1804, latest-1604 and latest-1404 tags, Docker-LAMP is flexible enough to use with all of your LAMP projects.
+With Ubuntu **18.04** amd **16.04** images on the `latest-1804` and `latest-1604` tags, Docker-LAMP is flexible enough to use with all of your LAMP projects.
 
 [![Build Status][shield-build-status]][info-build-status]
 [![Docker Hub][shield-docker-hub]][info-docker-hub]
-[![Quay Status][shield-quay]][info-quay]
 [![License][shield-license]][info-license]
-
 
 ### Contents
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
@@ -53,14 +51,16 @@ Designed to be a single interface that just 'gets out of your way', and works on
 ## Image Versions
 > **NOTE:** [PHP 5.6 is end of life][end-of-life], so the PHP 5 images `mattrayner/lamp:latest-1404-php5` and `mattrayner/lamp:latest-1604-php5` will not receive any updates. Although these images will stay on Docker Hub, we **strongly** recommend updating you applications to PHP7.
 
+> **NOTE**: The 14.04 variant of this image is no longer being actively supported for updated
+
 There are 4 main 'versions' of the docker image. The table below shows the different tags you can use, along with the PHP, MySQL and Apache versions that come with it.
 
 Component | `latest-1404` | `latest-1604` | `latest-1804`
 ---|---|---|---
-[Apache][apache] | `2.4.7` | `2.4.29` | `2.4.18`
-[MySQL][mysql] | `5.5.62` | `5.7.25` | `5.7.25`
-[PHP][php] | `7.3.3` | `7.3.3` | `7.3.3`
-[phpMyAdmin][phpmyadmin] | `4.8.5` | `4.8.5` | `4.8.5`
+[Apache][apache] | `2.4.7` | `2.4.18` | `2.4.29`
+[MySQL][mysql] | `5.5.62` | `5.7.26` | `5.7.26`
+[PHP][php] | `7.3.3` | `7.3.6` | `7.3.6`
+[phpMyAdmin][phpmyadmin] | `4.8.5` | `4.9.0.1` | `4.9.0.1`
 
 
 ## Using the image
@@ -259,12 +259,10 @@ Docker-LAMP is licensed under the [Apache 2.0 License][info-license].
 
 [info-build-status]: https://circleci.com/gh/mattrayner/docker-lamp
 [info-docker-hub]: https://hub.docker.com/r/mattrayner/lamp
-[info-quay]: https://quay.io/repository/mattrayner/docker-lamp
 [info-license]: LICENSE
 
 [shield-build-status]: https://img.shields.io/circleci/project/mattrayner/docker-lamp.svg
 [shield-docker-hub]: https://img.shields.io/badge/docker%20hub-mattrayner%2Flamp-brightgreen.svg
-[shield-quay]: https://quay.io/repository/mattrayner/docker-lamp/status
 [shield-license]: https://img.shields.io/badge/license-Apache%202.0-blue.svg
 
 [dgraziotin-lamp]: https://github.com/dgraziotin/osx-docker-lamp

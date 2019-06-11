@@ -12,6 +12,3 @@ echo "=> Testing 18.04 images"
 
 echo "=> Testing 16.04 images"
 . 1604.sh
-
-echo "=> Testing 14.04 images"
-. 1404.sh

@@ -1,6 +1,6 @@
 FROM phusion/baseimage:0.11
 MAINTAINER Matthew Rayner <hello@rayner.io>
-ENV REFRESHED_AT 2019-03-12
+ENV REFRESHED_AT 2019-06-11
 
 # based on dgraziotin/lamp
 # MAINTAINER Daniel Graziotin <daniel@ineed.coffee>
@@ -11,7 +11,7 @@ ENV DOCKER_USER_GID 20
 ENV BOOT2DOCKER_ID 1000
 ENV BOOT2DOCKER_GID 50
 
-ENV PHPMYADMIN_VERSION=4.8.5
+ENV PHPMYADMIN_VERSION=4.9.0.1
 
 # Tweaks to give Apache/PHP write permissions to the app
 RUN usermod -u ${BOOT2DOCKER_ID} www-data && \
