@@ -58,5 +58,7 @@ workflows:
               only: master
       - deploy-tags:
           filters:
+            branches:
+              ignore: /.*/
             tags:
               only: /.*/
