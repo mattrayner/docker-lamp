@@ -14,7 +14,7 @@ jobs:
     steps:
       - checkout
       - run: |
-          docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
+          docker login -u $DOCKER_USER -p $DOCKER_PASS
           docker-compose -f docker-compose.test.yml -p ci build
           docker tag ci_web1804-php7:latest mattrayner/lamp:latest
           docker tag ci_web1804-php7:latest mattrayner/lamp:latest-1804
