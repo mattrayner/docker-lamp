@@ -7,7 +7,8 @@ jobs:
       - run: |
           docker-compose -f docker-compose.test.yml -p ci build
           docker-compose -f docker-compose.test.yml -p ci up -d
-      - run: 'docker logs -f ci_sut_1; echo "Exited with status code: $(docker wait ci_sut_1)"; exit $(docker wait ci_sut_1)'
+      - run: cd tests && ./test.sh
+#      - run: 'docker logs -f ci_sut_1; echo "Exited with status code: $(docker wait ci_sut_1)"; exit $(docker wait ci_sut_1)'
 
   deploy_dev:
     machine: true
