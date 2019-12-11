@@ -42,7 +42,7 @@ With Ubuntu **18.04** amd **16.04** images on the `latest-1804` and `latest-1604
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
 ## Introduction
-As a developer, part of my day to day role is to build LAMP applications. I searched in vein for an image that had everything I wanted, up-to-date packages, a simple interface, good documentation and active support. 
+As a developer, part of my day to day role is to build LAMP applications. I searched in vein for an image that had everything I wanted, up-to-date packages, a simple interface, good documentation and active support.
 
 To complicate things even further I needed an image, or actually two, that would run my applications on both 14.04 and 16.04. Having two entirely separate workflows didn't make any sense to me, and Docker-LAMP was born.
 
@@ -153,11 +153,11 @@ The below example can be added to your `~/.bash_profile` file to add the alias c
 function launchdockerwithparams {
     APACHE_PORT=80
     MYSQL_PORT_COMMAND=""
-    
+
     if ! [[ -z "$1" ]]; then
         APACHE_PORT=$1
     fi
-    
+
     if ! [[ -z "$2" ]]; then
         MYSQL_PORT_COMMAND="-p \"$2:3306\""
     fi
@@ -189,12 +189,12 @@ git clone https://github.com/mattrayner/docker-lamp.git
 cd docker-lamp
 
 # Build the 18.04, 16.04 image and the 14.04 images
-docker build -t=mattrayner/lamp:latest -f ./1804/Dockerfile-php7 .
-docker build -t=mattrayner/lamp:latest-1604 -f ./1604/Dockerfile-php7 .
-docker build -t=mattrayner/lamp:latest-1404 -f ./1404/Dockerfile-php7 .
+docker build -t=mattrayner/lamp:latest -f ./1804/Dockerfile .
+docker build -t=mattrayner/lamp:latest-1804 -f ./1804/Dockerfile .
+docker build -t=mattrayner/lamp:latest-1604 -f ./1604/Dockerfile .
 
-# Run the 14.04 image as a container
-docker run -p "3000:80" mattrayner/lamp:latest-1404 -d
+# Run the 18.04 image as a container
+docker run -p "3000:80" mattrayner/lamp:latest-1804 -d
 
 # Sleep to allow the container to boot
 sleep 5
@@ -209,7 +209,9 @@ We use `docker-compose` to setup, build and run our testing environment. It allo
 ### One-line testing command
 We've developed a single-line test command you can run on your machine within the `docker-lamp` directory. This will test any changes that may have been made, as well as comparing installed versions of Apache, MySQL, PHP and phpMyAdmin against those expected.
 ```bash
-docker-compose -f docker-compose.test.yml -p ci build; docker-compose -f docker-compose.test.yml -p ci up -d; docker logs -f ci_sut_1; echo "Exited with status code: $(docker wait ci_sut_1)";
+docker-compose -f docker-compose.test.yml -p ci build && \
+docker-compose -f docker-compose.test.yml -p ci up -d && \
+docker logs -f ci_sut_1 && echo "Exited with status code: $(docker wait ci_sut_1)";
 ```
 
 So what does this command do?
@@ -218,7 +220,7 @@ So what does this command do?
 First, build that latest version of our docker-compose images.
 
 #### `docker-compose -f docker-compose.test.yml -p ci up -d;`
-Launch our docker containers (`web1804`, `web1604`, `web1404` and `sut` or *system under tests*) in daemon mode.
+Launch our docker containers (`web1804`, `web1604` and `sut` or *system under tests*) in daemon mode.
 
 #### `docker logs -f ci_sut_1;`
 Display all of the logging output from the `sut` container (extremely useful for debugging)

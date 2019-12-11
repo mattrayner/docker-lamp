@@ -5,7 +5,7 @@ ENV REFRESHED_AT 2019-06-11
 # based on dgraziotin/lamp
 # MAINTAINER Daniel Graziotin <daniel@ineed.coffee>
 
-ENV DOCKER_USER_ID 501 
+ENV DOCKER_USER_ID 501
 ENV DOCKER_USER_GID 20
 
 ENV BOOT2DOCKER_ID 1000
@@ -24,17 +24,47 @@ RUN groupmod -g ${BOOT2DOCKER_GID} staff
 
 # Install packages
 ENV DEBIAN_FRONTEND noninteractive
-RUN add-apt-repository -y ppa:ondrej/php && \
-  apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4F4EA0AAE5267A6C && \
-  apt-get update && \
-  apt-get -y upgrade && \
-  apt-get -y install supervisor wget git apache2 php-xdebug libapache2-mod-php mysql-server php-mysql pwgen php-apcu php7.1-mcrypt php-gd php-xml php-mbstring php-gettext zip unzip php-zip curl php-curl && \
-  apt-get -y autoremove && \
-  echo "ServerName localhost" >> /etc/apache2/apache2.conf
+RUN add-apt-repository -y ppa:ondrej/php
+RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4F4EA0AAE5267A6C
+
+# issue with a bad repo
+RUN apt-get update --fix-missing
+
+# issue with util-linux
+# yup, this fixed a nasty bug
+# @see https://github.com/phusion/baseimage-docker/issues/542
+# somehow related to @see https://bugs.launchpad.net/ubuntu/+source/util-linux/+bug/1589289
+#   Someone slap the guy that did this!
+RUN echo 'DPkg::options { "--force-confdef"; };' >> /etc/apt/apt.conf
+
+RUN apt-get -y upgrade
+RUN apt-get -y install \
+    apache2 \
+    curl \
+    git \
+    libapache2-mod-php \
+    mysql-server \
+    php-apcu \
+    php-curl \
+    php-gd \
+    php-gettext \
+    php7.1-mcrypt \
+    php-mysql \
+    php-mbstring \
+    php-xdebug \
+    php-xml \
+    php-zip \
+    pwgen \
+    supervisor \
+    unzip \
+    wget \
+    zip
+RUN apt-get -y autoremove
+RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
 # needed for phpMyAdmin
 RUN ln -s /etc/php/7.1/mods-available/mcrypt.ini /etc/php/7.3/mods-available/ && \
-  phpenmod mcrypt
+    phpenmod mcrypt
 
 # Add image configuration and scripts
 ADD supporting_files/start-apache2.sh /start-apache2.sh
@@ -47,7 +77,7 @@ ADD supporting_files/mysqld_innodb.cnf /etc/mysql/conf.d/mysqld_innodb.cnf
 
 # Allow mysql to bind on 0.0.0.0
 RUN sed -i "s/.*bind-address.*/bind-address = 0.0.0.0/" /etc/mysql/my.cnf && \
-  sed -i "s/.*bind-address.*/bind-address = 0.0.0.0/" /etc/mysql/mysql.conf.d/mysqld.cnf
+    sed -i "s/.*bind-address.*/bind-address = 0.0.0.0/" /etc/mysql/mysql.conf.d/mysqld.cnf
 
 # Set PHP timezones to Europe/London
 RUN sed -i "s/;date.timezone =/date.timezone = Europe\/London/g" /etc/php/7.3/apache2/php.ini
