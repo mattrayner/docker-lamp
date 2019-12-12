@@ -6,7 +6,9 @@ echo "Testing mattrayner/lamp"
 echo "=> Sleeping to allow boot of containers"
 sleep 60
 
-mkdir actual
+if [ ! -d actual ]; then
+    mkdir actual
+fi
 
 echo
 echo "=> Testing 18.04 images"

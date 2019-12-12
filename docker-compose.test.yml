@@ -1,18 +1,21 @@
 sut:
   build: tests/.
   dockerfile: Dockerfile.test
+  container_name: ci_sut
   links:
-    - web1804-php7
-    - web1604-php7
+    - web1804-php7.3
+    - web1604-php7.3
 
-web1804-php7:
+web1804-php7.3:
   build: .
-  dockerfile: ./1804/Dockerfile
-  ports:
-    - "3000:80"
-
-web1604-php7:
-  build: .
-  dockerfile: ./1604/Dockerfile
+  dockerfile: ./1804/Dockerfile-7.3
+  container_name: ci_1804-73
   ports:
     - "3001:80"
+
+web1604-php7.3:
+  build: .
+  dockerfile: ./1604/Dockerfile-7.3
+  container_name: ci_1604-73
+  ports:
+    - "3000:80"

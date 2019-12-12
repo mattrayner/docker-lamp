@@ -7,7 +7,7 @@ jobs:
       - run: |
           docker-compose -f docker-compose.test.yml -p ci build
           docker-compose -f docker-compose.test.yml -p ci up -d
-          cd tests && ./test.sh
+          cd tests && ./test.sh && cd ../
 
   deploy:
     machine: true

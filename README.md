@@ -110,7 +110,6 @@ First, get the ID of your running container with `docker ps`, then run the below
 docker exec CONTAINER_ID  mysql -uroot -e "create database DATABASE_NAME"
 ```
 
-
 ## Adding your own content
 The 'easiest' way to add your own content to the lamp image is using Docker volumes. This will effectively 'sync' a particular folder on your machine with that on the docker container.
 
@@ -188,13 +187,13 @@ ldi 3000 3306
 git clone https://github.com/mattrayner/docker-lamp.git
 cd docker-lamp
 
-# Build the 18.04, 16.04 image and the 14.04 images
-docker build -t=mattrayner/lamp:latest -f ./1804/Dockerfile .
-docker build -t=mattrayner/lamp:latest-1804 -f ./1804/Dockerfile .
-docker build -t=mattrayner/lamp:latest-1604 -f ./1604/Dockerfile .
+# Build the latest, 18.04, and 16.04 images
+docker build -t=mattrayner/lamp:latest -f ./1804/Dockerfile-7.3 .
+docker build -t=mattrayner/lamp:latest-1804 -f ./1804/Dockerfile-7.3 .
+docker build -t=mattrayner/lamp:latest-1604 -f ./1604/Dockerfile-7.3 .
 
 # Run the 18.04 image as a container
-docker run -p "3000:80" mattrayner/lamp:latest-1804 -d
+docker run -d -p "3000:80" mattrayner/lamp:latest-1804
 
 # Sleep to allow the container to boot
 sleep 5
@@ -204,14 +203,18 @@ curl "http://$(docker-machine ip):3000/"
 ```
 
 ### Testing
-We use `docker-compose` to setup, build and run our testing environment. It allows us to offload a large amount of the testing overhead to Docker, and to ensure that we always test our image in a consistent way thats not affected by the host machine.
+We use `docker-compose` to setup, build and run our testing environment. It allows us to offload a large amount of the testing overhead to Docker, and to ensure that we always test our image in a consistent way that's not affected by the host machine.
 
 ### One-line testing command
 We've developed a single-line test command you can run on your machine within the `docker-lamp` directory. This will test any changes that may have been made, as well as comparing installed versions of Apache, MySQL, PHP and phpMyAdmin against those expected.
 ```bash
 docker-compose -f docker-compose.test.yml -p ci build && \
 docker-compose -f docker-compose.test.yml -p ci up -d && \
-docker logs -f ci_sut_1 && echo "Exited with status code: $(docker wait ci_sut_1)";
+docker logs -f ci_sut && echo "Exited with status code: $(docker wait ci_sut)";
+```
+or use the script:
+```bash
+./docker-build-test.sh
 ```
 
 So what does this command do?
@@ -228,12 +231,16 @@ Display all of the logging output from the `sut` container (extremely useful for
 #### `echo "Exited with status code: $(docker wait ci_sut_1)"`
 Report back the status code that the `sut` container ended with.
 
+#### Clearing Test stuff
+To stop, and remove all containers that were created by the test, run the below command:
+```bash
+./docker-clear-test-stuff.sh
+```
 
 ## Inspiration
 This image was originally based on [dgraziotin/lamp][dgraziotin-lamp], with a few changes to make it compatible with the Concrete5 CMS.
 
 I also changed the setup to create ubuntu (well, baseimage, but you get what I'm saying) images so that this project could be as useful as possible to as many people as possible.
-
 
 ## Contributing
 If you wish to submit a bug fix or feature, you can create a pull request and it will be merged pending a code review.
@@ -248,7 +255,6 @@ If you wish to submit a bug fix or feature, you can create a pull request and it
 
 ## License
 Docker-LAMP is licensed under the [Apache 2.0 License][info-license].
-
 
 [logo]: https://cdn.rawgit.com/mattrayner/docker-lamp/831976c022782e592b7e2758464b2a9efe3da042/docs/logo.svg
 

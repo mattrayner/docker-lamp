@@ -5,6 +5,10 @@ ENV REFRESHED_AT 2019-06-11
 # based on dgraziotin/lamp
 # MAINTAINER Daniel Graziotin <daniel@ineed.coffee>
 
+RUN echo "--------------------------" && \
+    echo "-------Running 1604-------" && \
+    echo "--------------------------"
+
 ENV DOCKER_USER_ID 501
 ENV DOCKER_USER_GID 20
 
@@ -33,27 +37,35 @@ RUN apt-get update --fix-missing
 # issue with util-linux
 # yup, this fixed a nasty bug
 # @see https://github.com/phusion/baseimage-docker/issues/542
-# somehow related to @see https://bugs.launchpad.net/ubuntu/+source/util-linux/+bug/1589289
+# somehow related to:
+# @see https://bugs.launchpad.net/ubuntu/+source/util-linux/+bug/1589289
 #   Someone slap the guy that did this!
 RUN echo 'DPkg::options { "--force-confdef"; };' >> /etc/apt/apt.conf
 
 RUN apt-get -y upgrade
 RUN apt-get -y install \
     apache2 \
+    autoconf  \
     curl \
+    gcc \
     git \
     libapache2-mod-php \
+    libc-dev \
+    make \
     mysql-server \
     php-apcu \
-    php-curl \
-    php-gd \
     php-gettext \
-    php7.1-mcrypt \
-    php-mysql \
-    php-mbstring \
+    php-pear \
     php-xdebug \
     php-xml \
-    php-zip \
+    php7.3-common \
+    php7.3-curl \
+    php7.3-dev \
+    php7.3-gd \
+    php7.3-mysql \
+    php7.3-mbstring \
+    php7.3-zip \
+    pkg-config \
     pwgen \
     supervisor \
     unzip \
@@ -63,8 +75,12 @@ RUN apt-get -y autoremove
 RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
 # needed for phpMyAdmin
-RUN ln -s /etc/php/7.1/mods-available/mcrypt.ini /etc/php/7.3/mods-available/ && \
-    phpenmod mcrypt
+# install mcrypt through pecl
+# @see https://lukasmestan.com/install-mcrypt-extension-in-php7-2/
+RUN apt-get -y install gcc make autoconf libc-dev pkg-config libmcrypt-dev
+RUN echo "\n" | pecl install mcrypt
+RUN echo "extension=mcrypt.so" > /etc/php/7.3/mods-available/mcrypt.ini
+RUN phpenmod mcrypt
 
 # Add image configuration and scripts
 ADD supporting_files/start-apache2.sh /start-apache2.sh
