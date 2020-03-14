@@ -33,8 +33,8 @@ With Ubuntu **18.04** amd **16.04** images on the `latest-1804` and `latest-1604
   - [One-line testing command](#one-line-testing-command)
     - [`docker-compose -f docker-compose.test.yml -p ci build;`](#docker-compose--f-docker-composetestyml--p-ci-build)
     - [`docker-compose -f docker-compose.test.yml -p ci up -d;`](#docker-compose--f-docker-composetestyml--p-ci-up--d)
-    - [`docker logs -f ci_sut_1;`](#docker-logs--f-ci_sut_1)
-    - [`echo "Exited with status code: $(docker wait ci_sut_1)"`](#echo-exited-with-status-code-docker-wait-ci_sut_1)
+    - [`cd tests && ./test.sh;`](#cd-tests--testsh)
+    - [`echo "Exited with status code: $?"`](#echo-exited-with-status-code-)
 - [Inspiration](#inspiration)
 - [Contributing](#contributing)
 - [License](#license)
@@ -188,13 +188,13 @@ ldi 3000 3306
 git clone https://github.com/mattrayner/docker-lamp.git
 cd docker-lamp
 
-# Build the 18.04, 16.04 image and the 14.04 images
-docker build -t=mattrayner/lamp:latest -f ./1804/Dockerfile-php7 .
-docker build -t=mattrayner/lamp:latest-1604 -f ./1604/Dockerfile-php7 .
-docker build -t=mattrayner/lamp:latest-1404 -f ./1404/Dockerfile-php7 .
+# Build the images
+docker build -t=mattrayner/lamp:latest -f ./1804/Dockerfile .
+docker build -t=mattrayner/lamp:latest-1604 -f ./1604/Dockerfile .
+docker build -t=mattrayner/lamp:latest-1804 -f ./1804/Dockerfile .
 
-# Run the 14.04 image as a container
-docker run -p "3000:80" mattrayner/lamp:latest-1404 -d
+# Run the image as a container
+docker run -p "3000:80" mattrayner/lamp:latest-1804 -d
 
 # Sleep to allow the container to boot
 sleep 5
@@ -209,7 +209,7 @@ We use `docker-compose` to setup, build and run our testing environment. It allo
 ### One-line testing command
 We've developed a single-line test command you can run on your machine within the `docker-lamp` directory. This will test any changes that may have been made, as well as comparing installed versions of Apache, MySQL, PHP and phpMyAdmin against those expected.
 ```bash
-docker-compose -f docker-compose.test.yml -p ci build; docker-compose -f docker-compose.test.yml -p ci up -d; docker logs -f ci_sut_1; echo "Exited with status code: $(docker wait ci_sut_1)";
+docker-compose -f docker-compose.test.yml -p ci build; docker-compose -f docker-compose.test.yml -p ci up -d; cd tests && ./test.sh; echo "Exited with status code: $?";
 ```
 
 So what does this command do?
@@ -218,13 +218,13 @@ So what does this command do?
 First, build that latest version of our docker-compose images.
 
 #### `docker-compose -f docker-compose.test.yml -p ci up -d;`
-Launch our docker containers (`web1804`, `web1604`, `web1404` and `sut` or *system under tests*) in daemon mode.
+Launch our docker containers (`web1804` and `web1604`) in daemon mode.
 
-#### `docker logs -f ci_sut_1;`
-Display all of the logging output from the `sut` container (extremely useful for debugging)
+#### `cd tests && ./test.sh;`
+Change into the test directory and run out tests
 
-#### `echo "Exited with status code: $(docker wait ci_sut_1)"`
-Report back the status code that the `sut` container ended with.
+#### `echo "Exited with status code: $?"`
+Report back whether the tests passed or not
 
 
 ## Inspiration

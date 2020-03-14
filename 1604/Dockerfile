@@ -11,7 +11,7 @@ ENV DOCKER_USER_GID 20
 ENV BOOT2DOCKER_ID 1000
 ENV BOOT2DOCKER_GID 50
 
-ENV PHPMYADMIN_VERSION=4.9.0.1
+ENV PHPMYADMIN_VERSION=5.0.1
 
 # Tweaks to give Apache/PHP write permissions to the app
 RUN usermod -u ${BOOT2DOCKER_ID} www-data && \
@@ -27,14 +27,10 @@ ENV DEBIAN_FRONTEND noninteractive
 RUN add-apt-repository -y ppa:ondrej/php && \
   apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4F4EA0AAE5267A6C && \
   apt-get update && \
-  apt-get -y upgrade && \
-  apt-get -y install supervisor wget git apache2 php-xdebug libapache2-mod-php mysql-server php-mysql pwgen php-apcu php7.1-mcrypt php-gd php-xml php-mbstring php-gettext zip unzip php-zip curl php-curl && \
+  apt-get -o Dpkg::Options::="--force-confnew" --force-yes -fuy upgrade && \
+  apt-get -y install supervisor wget git apache2 php-xdebug libapache2-mod-php mysql-server php-mysql pwgen php-apcu php-gd php-xml php-mbstring php-gettext zip unzip php-zip curl php-curl && \
   apt-get -y autoremove && \
   echo "ServerName localhost" >> /etc/apache2/apache2.conf
-
-# needed for phpMyAdmin
-RUN ln -s /etc/php/7.1/mods-available/mcrypt.ini /etc/php/7.3/mods-available/ && \
-  phpenmod mcrypt
 
 # Add image configuration and scripts
 ADD supporting_files/start-apache2.sh /start-apache2.sh
@@ -45,20 +41,11 @@ ADD supporting_files/supervisord-apache2.conf /etc/supervisor/conf.d/supervisord
 ADD supporting_files/supervisord-mysqld.conf /etc/supervisor/conf.d/supervisord-mysqld.conf
 ADD supporting_files/mysqld_innodb.cnf /etc/mysql/conf.d/mysqld_innodb.cnf
 
-# Allow mysql to bind on 0.0.0.0
-RUN sed -i "s/.*bind-address.*/bind-address = 0.0.0.0/" /etc/mysql/my.cnf && \
-  sed -i "s/.*bind-address.*/bind-address = 0.0.0.0/" /etc/mysql/mysql.conf.d/mysqld.cnf
-
-# Set PHP timezones to Europe/London
-RUN sed -i "s/;date.timezone =/date.timezone = Europe\/London/g" /etc/php/7.3/apache2/php.ini
-RUN sed -i "s/;date.timezone =/date.timezone = Europe\/London/g" /etc/php/7.3/cli/php.ini
-
 # Remove pre-installed database
 RUN rm -rf /var/lib/mysql
 
 # Add MySQL utils
 ADD supporting_files/create_mysql_users.sh /create_mysql_users.sh
-RUN chmod 755 /*.sh
 
 # Add phpmyadmin
 RUN wget -O /tmp/phpmyadmin.tar.gz https://files.phpmyadmin.net/phpMyAdmin/${PHPMYADMIN_VERSION}/phpMyAdmin-${PHPMYADMIN_VERSION}-all-languages.tar.gz

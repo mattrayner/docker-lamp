@@ -72,7 +72,8 @@ chown -R www-data:staff /var/run/mysqld
 
 if [ -e /var/run/mysqld/mysqld.sock ]; then rm /var/run/mysqld/mysqld.sock; fi
 
-sed -i "/.*bind-address.*/bind-address = 0.0.0.0/" /etc/mysql/mysql.conf.d/mysqld.cnf
+sed -i "s/.*bind-address.*/bind-address = 0.0.0.0/" /etc/mysql/my.cnf
+sed -i "s/.*bind-address.*/bind-address = 0.0.0.0/" /etc/mysql/mysql.conf.d/mysqld.cnf
 sed -i "/user.*/user = www-data/" /etc/mysql/mysql.conf.d/mysqld.cnf
 
 if [[ ! -d $VOLUME_HOME/mysql ]]; then
