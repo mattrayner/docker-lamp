@@ -73,7 +73,7 @@ ENV PHP_POST_MAX_SIZE 10M
 ENV PHP_VERSION 7.4
 
 # Add volumes for the app and MySql
-VOLUME  ["/etc/mysql", "/var/lib/mysql", "/app" ]
+VOLUME  ["/var/lib/mysql", "/app" ]
 
 EXPOSE 80 3306
 CMD ["/run.sh"]
