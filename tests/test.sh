@@ -6,6 +6,9 @@ echo "Testing mattrayner/lamp"
 echo "=> Sleeping to allow boot of containers"
 sleep 60
 
+if [ -d actual ]; then
+     rm -R actual
+fi
 mkdir actual
 
 echo

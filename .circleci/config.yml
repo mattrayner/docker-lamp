@@ -4,10 +4,7 @@ jobs:
     machine: true
     steps:
       - checkout
-      - run: |
-          docker-compose -f docker-compose.test.yml -p ci build
-          docker-compose -f docker-compose.test.yml -p ci up -d
-          cd tests && ./test.sh
+      - run: make test
 
   deploy:
     machine: true

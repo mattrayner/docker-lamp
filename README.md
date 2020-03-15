@@ -1,5 +1,5 @@
 # ![Docker-LAMP][logo]
-Docker-LAMP is a set of docker images that include the phusion baseimage (14.04, 16.04 and 18.04 varieties), along with a LAMP stack ([Apache][apache], [MySQL][mysql] and [PHP][php]) all in one handy package.
+Docker-LAMP is a set of docker images that include the phusion baseimage (16.04 and 18.04 varieties), along with a LAMP stack ([Apache][apache], [MySQL][mysql] and [PHP][php]) all in one handy package.
 
 With Ubuntu **18.04** amd **16.04** images on the `latest-1804` and `latest-1604` tags, Docker-LAMP is flexible enough to use with all of your LAMP projects.
 
@@ -194,7 +194,7 @@ docker build -t=mattrayner/lamp:latest-1604 -f ./1604/Dockerfile .
 docker build -t=mattrayner/lamp:latest-1804 -f ./1804/Dockerfile .
 
 # Run the image as a container
-docker run -p "3000:80" mattrayner/lamp:latest-1804 -d
+docker run -d -p "3000:80" mattrayner/lamp:latest-1804
 
 # Sleep to allow the container to boot
 sleep 5
@@ -204,7 +204,7 @@ curl "http://$(docker-machine ip):3000/"
 ```
 
 ### Testing
-We use `docker-compose` to setup, build and run our testing environment. It allows us to offload a large amount of the testing overhead to Docker, and to ensure that we always test our image in a consistent way thats not affected by the host machine.
+We use `docker-compose` to setup, build and run our testing environment. It allows us to offload a large amount of the testing overhead to Docker, and to ensure that we always test our image in a consistent way that's not affected by the host machine.
 
 ### One-line testing command
 We've developed a single-line test command you can run on your machine within the `docker-lamp` directory. This will test any changes that may have been made, as well as comparing installed versions of Apache, MySQL, PHP and phpMyAdmin against those expected.
