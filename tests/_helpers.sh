@@ -20,3 +20,9 @@ function testimage {
     checkstatus $?
     echo
 }
+
+function testmysql {
+    echo "=> Connecting to MySQL: ($1:$2)"
+    mysql -h 127.0.0.1 -P $2 -u admin -ppassword -e"quit"
+    checkstatus $?
+}

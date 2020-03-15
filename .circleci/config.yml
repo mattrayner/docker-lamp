@@ -4,7 +4,10 @@ jobs:
     machine: true
     steps:
       - checkout
-      - run: make test
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+          make test
 
   deploy:
     machine: true

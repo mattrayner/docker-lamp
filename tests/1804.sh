@@ -2,3 +2,4 @@
 source _helpers.sh
 
 testimage 1804-php7 3000
+testmysql web1804-php7 3001
