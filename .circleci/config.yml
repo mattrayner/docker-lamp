@@ -6,7 +6,7 @@ jobs:
       - checkout
       - run: |
           sudo apt-get update
-          sudo apt-get install -y mysql-client-5.5
+          sudo apt-get install -y mysql-client
           make test
 
   deploy:
