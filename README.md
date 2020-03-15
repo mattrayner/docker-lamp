@@ -53,14 +53,14 @@ Designed to be a single interface that just 'gets out of your way', and works on
 
 > **NOTE**: The 14.04 variant of this image is no longer being actively supported for updated
 
-There are 4 main 'versions' of the docker image. The table below shows the different tags you can use, along with the PHP, MySQL and Apache versions that come with it.
+There are 3 main 'versions' of the docker image. The table below shows the different tags you can use, along with the PHP, MySQL and Apache versions that come with it.
 
 Component | `latest-1404` | `latest-1604` | `latest-1804`
 ---|---|---|---
 [Apache][apache] | `2.4.7` | `2.4.18` | `2.4.29`
-[MySQL][mysql] | `5.5.62` | `5.7.26` | `5.7.26`
-[PHP][php] | `7.3.3` | `7.3.6` | `7.3.6`
-[phpMyAdmin][phpmyadmin] | `4.8.5` | `4.9.0.1` | `4.9.0.1`
+[MySQL][mysql] | `5.5.62` | `5.7.29` | `5.7.29`
+[PHP][php] | `7.3.3` | `7.4.3` | `7.4.3`
+[phpMyAdmin][phpmyadmin] | `4.8.5` | `5.0.1` | `5.0.1`
 
 
 ## Using the image
