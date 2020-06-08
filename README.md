@@ -58,9 +58,9 @@ There are 3 main 'versions' of the docker image. The table below shows the diffe
 Component | `latest-1404` | `latest-1604` | `latest-1804`
 ---|---|---|---
 [Apache][apache] | `2.4.7` | `2.4.18` | `2.4.29`
-[MySQL][mysql] | `5.5.62` | `5.7.29` | `5.7.29`
-[PHP][php] | `7.3.3` | `7.4.3` | `7.4.3`
-[phpMyAdmin][phpmyadmin] | `4.8.5` | `5.0.1` | `5.0.1`
+[MySQL][mysql] | `5.5.62` | `5.7.30` | `5.7.30`
+[PHP][php] | `7.3.3` | `7.4.6` | `7.4.6`
+[phpMyAdmin][phpmyadmin] | `4.8.5` | `5.0.2` | `5.0.2`
 
 
 ## Using the image
