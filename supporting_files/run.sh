@@ -82,7 +82,7 @@ if [[ ! -d $VOLUME_HOME/mysql ]]; then
     echo "=> Installing MySQL ..."
 
     # Try the 'preferred' solution
-    mysqld --initialize-insecure > /dev/null 2>&1
+    mysqld --initialize-insecure
 
     # IF that didn't work
     if [ $? -ne 0 ]; then
