@@ -27,11 +27,11 @@ function testmysql {
     checkstatus $?
 }
 
-function waitForSupervisordProgram {
-    false
-    while [ $? -ne 0 ]; do
-        sleep 5
+function waitForSupervisordProcess {
+    while true; do
         echo "=> Waiting for $2 on the service $1..."
         docker-compose -f ../docker-compose.test.yml -p ci exec $1 supervisorctl status $2
+        [ $? -ne 0 ] || break
+        sleep 5
     done
 }
