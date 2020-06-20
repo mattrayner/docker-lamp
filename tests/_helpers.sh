@@ -26,3 +26,12 @@ function testmysql {
     mysql -h 127.0.0.1 -P $2 -u admin -ppassword -e"quit"
     checkstatus $?
 }
+
+function waitForSupervisordProgram {
+    false
+    while [ $? -ne 0 ]; do
+        sleep 5
+        echo "=> Waiting for $2 on the service $1..."
+        docker-compose -f ../docker-compose.test.yml -p ci exec $1 supervisorctl status $2
+    done
+}

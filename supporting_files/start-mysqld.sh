@@ -1,2 +1,2 @@
 #!/bin/bash
-exec /usr/bin/pidproxy /var/run/mysqld/mysqld.pid /usr/bin/mysqld_safe
+exec /usr/local/bin/pidproxy /var/run/mysqld/mysqld.pid /usr/bin/mysqld_safe
