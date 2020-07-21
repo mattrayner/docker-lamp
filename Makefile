@@ -15,4 +15,4 @@ run-tests:
 	cd tests && ./test.sh
 
 clean:
-	docker-compose -f docker-compose.test.yml down
+	docker-compose -f docker-compose.test.yml -p ci down
