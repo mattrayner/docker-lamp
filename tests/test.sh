@@ -15,3 +15,6 @@ echo "=> Testing 18.04 images"
 
 echo "=> Testing 16.04 images"
 . 1604.sh
+
+echo "=> Testing 18.04 with php 7.1 images"
+. 1804-php72.sh
