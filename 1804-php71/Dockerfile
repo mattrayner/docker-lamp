@@ -28,7 +28,7 @@ RUN add-apt-repository -y ppa:ondrej/php && \
   apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4F4EA0AAE5267A6C && \
   apt-get update && \
   apt-get -y upgrade && \
-  apt-get -y install postfix python3-setuptools wget git apache2 php-xdebug libapache2-mod-php mysql-server php7.1-mysql pwgen php-apcu php7.1-gd php7.1-xml php7.1-mbstring php-gettext zip unzip php7.1-zip curl php7.1-curl && \
+  apt-get -y install python3-setuptools wget git apache2 libapache2-mod-php7.1 php7.1-mysql pwgen php7.1-gd php7.1-xml php7.1-mbstring zip unzip php7.1-zip curl php7.1-curl && \
   apt-get -y autoremove && \
   echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
@@ -77,7 +77,7 @@ ADD app/ /app
 #Environment variables to configure php
 ENV PHP_UPLOAD_MAX_FILESIZE 10M
 ENV PHP_POST_MAX_SIZE 10M
-ENV PHP_VERSION 7.4
+ENV PHP_VERSION 7.1
 
 # Add volumes for the app and MySql
 VOLUME  ["/var/lib/mysql", "/app" ]
