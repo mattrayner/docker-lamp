@@ -28,7 +28,7 @@ RUN add-apt-repository -y ppa:ondrej/php && \
   apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4F4EA0AAE5267A6C && \
   apt-get update && \
   apt-get -y upgrade && \
-  apt-get -y install postfix python3-setuptools wget git apache2 php-xdebug libapache2-mod-php7.1 php7.1-mysql pwgen php7.1-gd php7.1-xml php7.1-mbstring zip unzip php7.1-zip curl php7.1-curl && \
+  apt-get -y install postfix python3-setuptools wget git apache2 php-xdebug libapache2-mod-php7.1 mysql-server php7.1-mysql pwgen php-apcu php7.1-gd php7.1-xml php7.1-mbstring zip unzip php7.1-zip curl php7.1-curl && \
   apt-get -y autoremove && \
   echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
