@@ -15,3 +15,12 @@ web1604-php7:
   ports:
     - "3010:80"
     - "3011:3306"
+
+web1804-php71:
+  build: .
+  dockerfile: ./1804-php71/Dockerfile
+  environment:
+    - MYSQL_ADMIN_PASS=password
+  ports:
+    - "3020:80"
+    - "3021:3306"
