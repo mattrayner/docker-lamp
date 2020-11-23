@@ -110,3 +110,7 @@ fi
 
 echo "Starting supervisord"
 exec supervisord -n
+
+echo "Check if custom-command script is available and start it"
+[ -d /run ] chmod -R 755 /run
+[ -x /run/execute.sh ] && /run/execute.sh >/dev/null 2>&1
