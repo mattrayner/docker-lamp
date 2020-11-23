@@ -27,6 +27,7 @@ With Ubuntu **18.04** amd **16.04** images on the `latest-1804` and `latest-1604
   - [Doing both](#doing-both)
     - [`.bash_profile` alias examples](#bash_profile-alias-examples)
       - [Example usage](#example-usage)
+  - [Adding custom startup commands](#adding-custom-startup-commands)
 - [Developing the image](#developing-the-image)
   - [Building and running](#building-and-running)
   - [Testing](#testing)
@@ -180,6 +181,34 @@ ldi 8080
 ldi 3000 3306
 ```
 
+### Adding custom startup commands
+Starting with commit #97 it is possible to have a persistent "startup folder" /run with a script named `/run/execute.sh` that is called at the end of the container initialization.
+In this script you can enter commands like:
+- crontab population and cron service starts
+- installing php extensions
+- installing apt packages
+- apt-get update and upgrade an container start
+
+If you want to use this script you have to mount the run directory into the container
+This is done like with all the other mounts:
+```bash
+docker run -i -t -p "80:80" -v ${PWD}/run:/run -v ${PWD}/app:/app -v ${PWD}/mysql:/var/lib/mysql mattrayner/lamp:latest
+```
+
+In your `${PWD}/run` folder you can now create a bash script named `execute.sh` which could look like this:
+```bash
+#!/bin/bash
+
+# Populate the root contab with a script from the app directory
+(crontab -l 2>/dev/null; echo "*/5 * * * * /var/www/html/cron.sh") | crontab -
+/etc/init.d/cron start
+
+# Install a php extension
+apt-get -y update
+apt-get -y install php-intl
+phpenmod intl
+service apache2 restart
+```
 
 ## Developing the image
 ### Building and running
