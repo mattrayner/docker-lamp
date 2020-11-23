@@ -187,7 +187,7 @@ In this script you can enter commands like:
 - crontab population and cron service starts
 - installing php extensions
 - installing apt packages
-- apt-get update and upgrade an container start
+- apt-get update and upgrade on container start
 
 If you want to use this script you have to mount the run directory into the container
 This is done like with all the other mounts:
