@@ -1,7 +1,7 @@
 # ![Docker-LAMP][logo]
-Docker-LAMP is a set of docker images that include the phusion baseimage (16.04 and 18.04 varieties), along with a LAMP stack ([Apache][apache], [MySQL][mysql] and [PHP][php]) all in one handy package.
+Docker-LAMP is a set of docker images that include the phusion baseimage (16.04, 18.04 and 20.04 varieties), along with a LAMP stack ([Apache][apache], [MySQL][mysql] and [PHP][php]) all in one handy package.
 
-With Ubuntu **18.04** amd **16.04** images on the `latest-1804` and `latest-1604` tags, Docker-LAMP is flexible enough to use with all of your LAMP projects.
+With Ubuntu **18.04**, **16.04** amd **20.04** images on the `latest-1804`, `latest-1604` and `latest-2004` tags, Docker-LAMP is flexible enough to use with all of your LAMP projects.
 
 [![Build Status][shield-build-status]][info-build-status]
 [![Docker Hub][shield-docker-hub]][info-docker-hub]
@@ -55,18 +55,21 @@ Designed to be a single interface that just 'gets out of your way', and works on
 
 There are 3 main 'versions' of the docker image. The table below shows the different tags you can use, along with the PHP, MySQL and Apache versions that come with it.
 
-Component | `latest-1404` | `latest-1604` | `latest-1804`
----|---|---|---
-[Apache][apache] | `2.4.7` | `2.4.18` | `2.4.29`
-[MySQL][mysql] | `5.5.62` | `5.7.30` | `5.7.30`
-[PHP][php] | `7.3.3` | `7.4.6` | `7.4.6`
-[phpMyAdmin][phpmyadmin] | `4.8.5` | `5.0.2` | `5.0.2`
+Component | `latest-1404` | `latest-1604` | `latest-1804` | `latest-2004`
+---|---|---|---|---
+[Apache][apache] | `2.4.7` | `2.4.18` | `2.4.29` | `2.4.41`
+[MySQL][mysql] | `5.5.62` | `5.7.30` | `5.7.30` | `8.0.26`
+[PHP][php] | `7.3.3` | `7.4.6` | `7.4.6` | `8.0.10`
+[phpMyAdmin][phpmyadmin] | `4.8.5` | `5.0.2` | `5.0.2` | `5.0.2`
 
 
 ## Using the image
 ### On the command line
 This is the quickest way
 ```bash
+# Launch a 20.04 based image
+docker run -p "80:80" -v ${PWD}/app:/app mattrayner/lamp:latest-2004
+
 # Launch a 18.04 based image
 docker run -p "80:80" -v ${PWD}/app:/app mattrayner/lamp:latest-1804
 
