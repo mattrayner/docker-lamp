@@ -1,8 +1,27 @@
-web1804-php7:
-  build: .
-  dockerfile: ./1804/Dockerfile
-  environment:
-    - MYSQL_ADMIN_PASS=password
-  ports:
-    - "3000:80"
-    - "3001:3306"
+version: "2"
+
+services:
+
+  web1804-php7:
+    build:
+      context: .
+      dockerfile: ./1804/Dockerfile
+      args:
+        - PHP_VERSION=7.4
+    environment:
+      - MYSQL_ADMIN_PASS=password
+    ports:
+      - "3000:80"
+      - "3001:3306"
+
+  web1804-php8:
+    build:
+      context: .
+      dockerfile: ./1804/Dockerfile
+      args:
+        - PHP_VERSION=8.0
+    environment:
+      - MYSQL_ADMIN_PASS=password
+    ports:
+      - "3020:80"
+      - "3021:3306"

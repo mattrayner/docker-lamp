@@ -1,9 +1,10 @@
 FROM phusion/baseimage:0.11
 MAINTAINER Matthew Rayner <hello@rayner.io>
-ENV REFRESHED_AT 2019-06-11
+ENV REFRESHED_AT 2021-09-08
 
 # based on dgraziotin/lamp
 # MAINTAINER Daniel Graziotin <daniel@ineed.coffee>
+# updated for PHP 8.0 Ferdinand Kasper <fkasper@modus-operandi.at>
 
 ENV DOCKER_USER_ID 501 
 ENV DOCKER_USER_GID 20
@@ -11,8 +12,11 @@ ENV DOCKER_USER_GID 20
 ENV BOOT2DOCKER_ID 1000
 ENV BOOT2DOCKER_GID 50
 
-ENV PHPMYADMIN_VERSION=5.0.2
-ENV SUPERVISOR_VERSION=4.2.0
+ENV PHPMYADMIN_VERSION=5.1.1
+ENV SUPERVISOR_VERSION=4.2.2
+
+ARG PHP_VERSION
+ENV PHP_VERSION=$PHP_VERSION
 
 # Tweaks to give Apache/PHP write permissions to the app
 RUN usermod -u ${BOOT2DOCKER_ID} www-data && \
@@ -28,8 +32,9 @@ RUN add-apt-repository -y ppa:ondrej/php && \
   apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4F4EA0AAE5267A6C && \
   apt-get update && \
   apt-get -y upgrade && \
-  apt-get -y install postfix python3-setuptools wget git apache2 php-xdebug libapache2-mod-php mysql-server php-mysql pwgen php-apcu php-gd php-xml php-mbstring php-gettext zip unzip php-zip curl php-curl && \
+  apt-get -y install postfix python3-setuptools wget git apache2 php${PHP_VERSION}-xdebug libapache2-mod-php${PHP_VERSION} mysql-server php${PHP_VERSION}-mysql pwgen php${PHP_VERSION}-apcu php${PHP_VERSION}-gd php${PHP_VERSION}-xml php${PHP_VERSION}-mbstring zip unzip php${PHP_VERSION}-zip curl php${PHP_VERSION}-curl && \
   apt-get -y autoremove && \
+  apt-get -y clean && \
   echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
 # Install supervisor 4
@@ -77,7 +82,6 @@ ADD app/ /app
 #Environment variables to configure php
 ENV PHP_UPLOAD_MAX_FILESIZE 10M
 ENV PHP_POST_MAX_SIZE 10M
-ENV PHP_VERSION 7.4
 
 # Add volumes for the app and MySql
 VOLUME  ["/var/lib/mysql", "/app" ]
