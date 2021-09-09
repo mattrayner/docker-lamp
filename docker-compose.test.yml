@@ -25,3 +25,27 @@ services:
     ports:
       - "3020:80"
       - "3021:3306"
+
+  web2004-php7:
+    build:
+      context: .
+      dockerfile: ./2004/Dockerfile
+      args:
+        - PHP_VERSION=7.4
+    environment:
+      - MYSQL_ADMIN_PASS=password
+    ports:
+      - "3030:80"
+      - "3031:3306"
+
+  web2004-php8:
+    build:
+      context: .
+      dockerfile: ./2004/Dockerfile
+      args:
+        - PHP_VERSION=8.0
+    environment:
+      - MYSQL_ADMIN_PASS=password
+    ports:
+      - "3040:80"
+      - "3041:3306"
