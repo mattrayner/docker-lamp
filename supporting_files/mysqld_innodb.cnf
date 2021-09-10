@@ -1,6 +1,0 @@
-[mysqld]
-server-id=1
-innodb_flush_method=O_DSYNC
-innodb-use-native-aio=0
-log_bin=ON
-bind-address=0.0.0.0
