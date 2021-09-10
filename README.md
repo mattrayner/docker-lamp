@@ -208,7 +208,7 @@ docker build --build-arg PHP_VERSION=7.4 -t=mattrayner/lamp:latest-1804-php7 -f 
 docker run -d -p "3000:80" mattrayner/lamp:latest
 
 # Sleep to allow the container to boot
-sleep 5
+sleep 30
 
 # Curl out the contents of our new container
 curl "http://$(docker-machine ip):3000/"
