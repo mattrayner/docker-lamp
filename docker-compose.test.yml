@@ -13,6 +13,8 @@ services:
     ports:
       - "3000:80"
       - "3001:3306"
+    tmpfs:
+      - /var/lib/mysql
 
   web1804-php8:
     build:
@@ -25,6 +27,8 @@ services:
     ports:
       - "3020:80"
       - "3021:3306"
+    tmpfs:
+      - /var/lib/mysql
 
   web2004-php7:
     build:
@@ -37,6 +41,8 @@ services:
     ports:
       - "3030:80"
       - "3031:3306"
+    tmpfs:
+      - /var/lib/mysql
 
   web2004-php8:
     build:
@@ -49,3 +55,5 @@ services:
     ports:
       - "3040:80"
       - "3041:3306"
+    tmpfs:
+      - /var/lib/mysql
