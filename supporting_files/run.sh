@@ -1,4 +1,4 @@
-c#!/bin/bash
+#!/bin/bash
 #
 # Prepare our container for initial boot.
 
