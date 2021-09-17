@@ -50,7 +50,7 @@ To complicate things even further I needed an image, or actually two, that would
 Designed to be a single interface that just 'gets out of your way', and works on 14.04 and 16.04 with php 5 and 7. You can move between all 4 images without changing how you work with Docker.
 
 ## Image Versions
-> **NOTE:** [PHP 5.6 is end of life][end-of-life], so the PHP 5 images `mattrayner/lamp:latest-1404-php5` and `mattrayner/lamp:latest-1604-php5` will not receive any updates. Although these images will stay on Docker Hub, we **strongly** recommend updating you applications to PHP7.
+> **NOTE:** [PHP 5.6 is end of life][end-of-life], so the PHP 5 images `grhangelone/lamp:latest-1404-php5` and `grhangelone/lamp:latest-1604-php5` will not receive any updates. Although these images will stay on Docker Hub, we **strongly** recommend updating you applications to PHP7.
 
 > **NOTE**: The 14.04 variant of this image is no longer being actively supported for updated
 
@@ -69,18 +69,13 @@ Component | `latest-1404` | `latest-1604` | `latest-1804`
 This is the quickest way
 ```bash
 # Launch a 18.04 based image
-docker run -p "80:80" -v ${PWD}/app:/app mattrayner/lamp:latest-1804
+docker run -p "80:80" -v ${PWD}/app:/app grhangelone/lamp:latest-1804
 
-# Launch a 16.04 based image
-docker run -p "80:80" -v ${PWD}/app:/app mattrayner/lamp:latest-1604
-
-# Launch a 14.04 based image
-docker run -p "80:80" -v ${PWD}/app:/app mattrayner/lamp:latest-1404
 ```
 
 ### With a Dockerfile
 ```docker
-FROM mattrayner/lamp:latest-1804
+FROM grhangelone/lamp:latest-1804
 
 # Your custom commands
 
@@ -125,29 +120,29 @@ The below examples assume the following project layout and that you are running 
 In english, your project should contain a folder called `app` containing all of your app's code. That's pretty much it.
 
 ### Adding your app
-The below command will run the docker image `mattrayner/lamp:latest` interactively, exposing port `80` on the host machine with port `80` on the docker container. It will then create a volume linking the `app/` directory within your project to the `/app` directory on the container. This is where Apache is expecting your PHP to live.
+The below command will run the docker image `grhangelone/lamp:latest` interactively, exposing port `80` on the host machine with port `80` on the docker container. It will then create a volume linking the `app/` directory within your project to the `/app` directory on the container. This is where Apache is expecting your PHP to live.
 ```bash
-docker run -i -t -p "80:80" -v ${PWD}/app:/app mattrayner/lamp:latest
+docker run -i -t -p "80:80" -v ${PWD}/app:/app grhangelone/lamp:latest
 ```
 
 ### Persisting your MySQL
-The below command will run the docker image `mattrayner/lamp:latest`, creating a `mysql/` folder within your project. This folder will be linked to `/var/lib/mysql` where all of the MySQL files from container lives. You will now be able to stop/start the container and keep your database changes.
+The below command will run the docker image `grhangelone/lamp:latest`, creating a `mysql/` folder within your project. This folder will be linked to `/var/lib/mysql` where all of the MySQL files from container lives. You will now be able to stop/start the container and keep your database changes.
 
 You may also add `-p 3306:3306` after `-p 80:80` to expose the mysql sockets on your host machine. This will allow you to connect an external application such as SequelPro or MySQL Workbench.
 ```bash
-docker run -i -t -p "80:80" -v ${PWD}/mysql:/var/lib/mysql mattrayner/lamp:latest
+docker run -i -t -p "80:80" -v ${PWD}/mysql:/var/lib/mysql grhangelone/lamp:latest
 ```
 
 ### Doing both
 The below command is our 'recommended' solution. It both adds your own PHP and persists database files. We have created a more advanced alias in our `.bash_profile` files to enable the short commands `ldi` and `launchdocker`. See the next section for an example.
 ```bash
-docker run -i -t -p "80:80" -v ${PWD}/app:/app -v ${PWD}/mysql:/var/lib/mysql mattrayner/lamp:latest
+docker run -i -t -p "80:80" -v ${PWD}/app:/app -v ${PWD}/mysql:/var/lib/mysql grhangelone/lamp:latest
 ```
 
 #### `.bash_profile` alias examples
-The below example can be added to your `~/.bash_profile` file to add the alias commands `ldi` and `launchdocker`. By default it will launch the 16.04 image - if you need the 14.04 image, simply change the `docker run` command to use `mattrayner/lamp:latest-1404` instead of `mattrayner/lamp:latest`.
+The below example can be added to your `~/.bash_profile` file to add the alias commands `ldi` and `launchdocker`. By default it will launch the 16.04 image - if you need the 14.04 image, simply change the `docker run` command to use `grhangelone/lamp:latest-1404` instead of `grhangelone/lamp:latest`.
 ```bash
-# A helper function to launch docker container using mattrayner/lamp with overrideable parameters
+# A helper function to launch docker container using grhangelone/lamp with overrideable parameters
 #
 # $1 - Apache Port (optional)
 # $2 - MySQL Port (optional - no value will cause MySQL not to be mapped)
@@ -163,7 +158,7 @@ function launchdockerwithparams {
         MYSQL_PORT_COMMAND="-p \"$2:3306\""
     fi
 
-    docker run -i -t -p "$APACHE_PORT:80" $MYSQL_PORT_COMMAND -v ${PWD}/app:/app -v ${PWD}/mysql:/var/lib/mysql mattrayner/lamp:latest
+    docker run -i -t -p "$APACHE_PORT:80" $MYSQL_PORT_COMMAND -v ${PWD}/app:/app -v ${PWD}/mysql:/var/lib/mysql grhangelone/lamp:latest
 }
 alias launchdocker='launchdockerwithparams $1 $2'
 alias ldi='launchdockerwithparams $1 $2'
@@ -182,7 +177,7 @@ ldi 3000 3306
 ```
 
 ### Adding custom startup commands
-Starting with commit #97 it is possible to have a persistent "startup folder" /run with a script named `/run/execute.sh` that is called at the end of the container initialization.
+It is possible to have a persistent "startup folder" /exec with a script named `/exec/execute.sh` that is called at the end of the container initialization.
 In this script you can enter commands like:
 - crontab population and cron service starts
 - installing php extensions
@@ -192,10 +187,10 @@ In this script you can enter commands like:
 If you want to use this script you have to mount the run directory into the container
 This is done like with all the other mounts:
 ```bash
-docker run -i -t -p "80:80" -v ${PWD}/run:/run -v ${PWD}/app:/app -v ${PWD}/mysql:/var/lib/mysql mattrayner/lamp:latest
+docker run -i -t -p "80:80" -v ${PWD}/exec:/exec -v ${PWD}/app:/app -v ${PWD}/mysql:/var/lib/mysql grhangelone/lamp:latest
 ```
 
-In your `${PWD}/run` folder you can now create a bash script named `execute.sh` which could look like this:
+In your `${PWD}/exec` folder you can now create a bash script named `execute.sh` which could look like this:
 ```bash
 #!/bin/bash
 
@@ -218,12 +213,12 @@ git clone https://github.com/mattrayner/docker-lamp.git
 cd docker-lamp
 
 # Build the images
-docker build -t=mattrayner/lamp:latest -f ./1804/Dockerfile .
-docker build -t=mattrayner/lamp:latest-1604 -f ./1604/Dockerfile .
-docker build -t=mattrayner/lamp:latest-1804 -f ./1804/Dockerfile .
+docker build -t=grhangelone/lamp:latest -f ./1804/Dockerfile .
+docker build -t=grhangelone/lamp:latest-1604 -f ./1604/Dockerfile .
+docker build -t=grhangelone/lamp:latest-1804 -f ./1804/Dockerfile .
 
 # Run the image as a container
-docker run -d -p "3000:80" mattrayner/lamp:latest-1804
+docker run -d -p "3000:80" grhangelone/lamp:latest-1804
 
 # Sleep to allow the container to boot
 sleep 5
@@ -287,7 +282,7 @@ Docker-LAMP is licensed under the [Apache 2.0 License][info-license].
 [end-of-life]: http://php.net/supported-versions.php
 
 [info-build-status]: https://circleci.com/gh/mattrayner/docker-lamp
-[info-docker-hub]: https://hub.docker.com/r/mattrayner/lamp
+[info-docker-hub]: https://hub.docker.com/r/grhangelone/lamp
 [info-license]: LICENSE
 
 [shield-build-status]: https://img.shields.io/circleci/project/mattrayner/docker-lamp.svg
