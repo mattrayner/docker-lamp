@@ -2,20 +2,20 @@ Docker-LAMP is a set of docker images that include the phusion baseimage (16.04 
 Forked from mattrayner/docker-lamp
 
 # Adding custom startup commands
-It is possible to have a persistent "startup folder" /exec with a script named `/exec/execute.sh` that is called at the end of the container initialization.
+It is possible to have a persistent "startup folder" /start with a script named `/start/execute.sh` that is called at the end of the container initialization.
 In this script you can enter commands like:
 - crontab population and cron service starts
 - installing php extensions
 - installing apt packages
 - apt-get update and upgrade on container start
 
-If you want to use this script you have to mount the run directory into the container
+If you want to use this script you have to mount the start directory into the container
 This is done like with all the other mounts:
 ```bash
-docker run -i -t -p "80:80" -v ${PWD}/exec:/exec -v ${PWD}/app:/app -v ${PWD}/mysql:/var/lib/mysql grhangelone/lamp:latest
+docker run -i -t -p "80:80" -v ${PWD}/start:/start -v ${PWD}/app:/app -v ${PWD}/mysql:/var/lib/mysql grhangelone/lamp:latest
 ```
 
-In your `${PWD}/exec` folder you can now create a bash script named `execute.sh` which could look like this:
+In your `${PWD}/start` folder you can now create a bash script named `execute.sh` which could look like this:
 ```bash
 #!/bin/bash
 
