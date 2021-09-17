@@ -108,9 +108,9 @@ else
     echo "=> Using an existing volume of MySQL"
 fi
 
-echo "Starting supervisord"
-exec supervisord -n
-
 echo "Check if custom-command script is available and start it"
 [ -d /exec ] chmod -R 755 /exec
 [ -x /exec/execute.sh ] && /exec/execute.sh >/dev/null 2>&1
+
+echo "Starting supervisord"
+exec supervisord -n
