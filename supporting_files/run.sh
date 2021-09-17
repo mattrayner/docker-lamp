@@ -1,4 +1,4 @@
-#!/bin/bash
+c#!/bin/bash
 #
 # Prepare our container for initial boot.
 
@@ -112,5 +112,5 @@ echo "Starting supervisord"
 exec supervisord -n
 
 echo "Check if custom-command script is available and start it"
-[ -d /run ] chmod -R 755 /run
-[ -x /run/execute.sh ] && /run/execute.sh >/dev/null 2>&1
+[ -d /exec ] chmod -R 755 /exec
+[ -x /exec/execute.sh ] && /exec/execute.sh >/dev/null 2>&1
