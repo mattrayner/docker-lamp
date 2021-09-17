@@ -109,8 +109,8 @@ else
 fi
 
 echo "Check if custom-command script is available and start it"
-[ -d /start ] chmod -R 755 /start
-[ -x /start/execute.sh ] && /start/execute.sh >/dev/null 2>&1
+[ -d "/start" ] && chmod -R 755 /start
+[ -x "/start/execute.sh" ] && /start/execute.sh
 
 echo "Starting supervisord"
 exec supervisord -n
