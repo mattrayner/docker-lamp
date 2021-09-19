@@ -12,7 +12,8 @@ function checkstatus {
 # Test our image, first curling our container and then checking the result against our expectations
 function testimage {
     echo "=> Querying image ($1)"
-    curl --retry 10 --retry-delay 5 -o actual/$1.html http://localhost:$2 --stderr -
+    docker-compose -f ../docker-compose.test.yml -p ci exec web$1 curl --head --retry 10 --retry-delay 5 --silent --show-error http://127.0.0.1 >/dev/null && \
+    curl --retry 3 --retry-delay 3 --silent --show-error --stderr - -o actual/$1.html http://localhost:$2
     checkstatus $?
 
     echo "=> Checking against expected values ($1)"
@@ -23,6 +24,7 @@ function testimage {
 
 function testmysql {
     echo "=> Connecting to MySQL: ($1:$2)"
+    docker-compose -f ../docker-compose.test.yml -p ci exec $1 mysql -h 127.0.0.1 -u admin -ppassword -e"quit" && \
     mysql -h 127.0.0.1 -P $2 -u admin -ppassword -e"quit"
     checkstatus $?
 }

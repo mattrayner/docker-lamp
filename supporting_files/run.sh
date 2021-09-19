@@ -79,6 +79,9 @@ chown -R www-data:staff /var/lib/mysql
 chown -R www-data:staff /var/run/mysqld
 chown -R www-data:staff /var/log/mysql
 
+# Listen only on IPv4 addresses
+sed -i 's/^Listen .*/Listen 0.0.0.0:80/' /etc/apache2/ports.conf
+
 if [ -e /var/run/mysqld/mysqld.sock ];then
     echo "Removing MySQL socket"
     rm /var/run/mysqld/mysqld.sock
@@ -94,7 +97,7 @@ if [[ ! -d $VOLUME_HOME/mysql ]]; then
     echo "=> Installing MySQL ..."
 
     # Try the 'preferred' solution
-    mysqld --initialize-insecure
+    mysqld --initialize-insecure --innodb-flush-log-at-trx-commit=0 --skip-log-bin
 
     # IF that didn't work
     if [ $? -ne 0 ]; then

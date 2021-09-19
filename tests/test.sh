@@ -10,8 +10,14 @@ fi
 mkdir actual
 
 echo
-echo "=> Testing 18.04 images"
-. 1804.sh
+echo "=> Testing 20.04 PHP 7 images"
+. 2004-php7.sh
 
-echo "=> Testing 16.04 images"
-. 1604.sh
+echo "=> Testing 20.04 PHP 8 images"
+. 2004-php8.sh
+
+echo "=> Testing 18.04 PHP 7 images"
+. 1804-php7.sh
+
+echo "=> Testing 18.04 PHP 8 images"
+. 1804-php8.sh

@@ -1,9 +1,10 @@
-FROM phusion/baseimage:0.10.2
+FROM phusion/baseimage:focal-1.1.0
 MAINTAINER Matthew Rayner <hello@rayner.io>
-ENV REFRESHED_AT 2019-06-11
+ENV REFRESHED_AT 2021-09-07
 
 # based on dgraziotin/lamp
 # MAINTAINER Daniel Graziotin <daniel@ineed.coffee>
+# updated for Ubuntu 20.04 LTS/PHP 7.4/PHP 8.0 Ferdinand Kasper <fkasper@modus-operandi.at>
 
 ENV DOCKER_USER_ID 501 
 ENV DOCKER_USER_GID 20
@@ -11,26 +12,29 @@ ENV DOCKER_USER_GID 20
 ENV BOOT2DOCKER_ID 1000
 ENV BOOT2DOCKER_GID 50
 
-ENV PHPMYADMIN_VERSION=5.0.2
-ENV SUPERVISOR_VERSION=4.2.0
+ENV PHPMYADMIN_VERSION=5.1.1
+ENV SUPERVISOR_VERSION=4.2.2
+
+ARG PHP_VERSION
+ENV PHP_VERSION=$PHP_VERSION
 
 # Tweaks to give Apache/PHP write permissions to the app
 RUN usermod -u ${BOOT2DOCKER_ID} www-data && \
     usermod -G staff www-data && \
     useradd -r mysql && \
-    usermod -G staff mysql
-
-RUN groupmod -g $(($BOOT2DOCKER_GID + 10000)) $(getent group $BOOT2DOCKER_GID | cut -d: -f1)
-RUN groupmod -g ${BOOT2DOCKER_GID} staff
+    usermod -G staff mysql && \
+    groupmod -g $(($BOOT2DOCKER_GID + 10000)) $(getent group $BOOT2DOCKER_GID | cut -d: -f1) && \
+    groupmod -g ${BOOT2DOCKER_GID} staff
 
 # Install packages
 ENV DEBIAN_FRONTEND noninteractive
-RUN add-apt-repository -y ppa:ondrej/php && \
+RUN LC_ALL=C.UTF-8 add-apt-repository -y ppa:ondrej/php && \
   apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 4F4EA0AAE5267A6C && \
   apt-get update && \
-  apt-get -o Dpkg::Options::="--force-confnew" --force-yes -fuy upgrade && \
-  apt-get -y install postfix python3-setuptools wget git apache2 php-xdebug libapache2-mod-php mysql-server php-mysql pwgen php-apcu php-gd php-xml php-mbstring php-gettext zip unzip php-zip curl php-curl && \
+  apt-get -y upgrade && \
+  apt-get -y install postfix python3-setuptools wget git apache2 php${PHP_VERSION}-xdebug libapache2-mod-php${PHP_VERSION} mysql-server php${PHP_VERSION}-mysql pwgen php${PHP_VERSION}-apcu php${PHP_VERSION}-gd php${PHP_VERSION}-xml php${PHP_VERSION}-mbstring zip unzip php${PHP_VERSION}-zip curl php${PHP_VERSION}-curl && \
   apt-get -y autoremove && \
+  apt-get -y clean && \
   echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
 # Install supervisor 4
@@ -46,7 +50,6 @@ RUN chmod 755 /*.sh
 ADD supporting_files/supervisord-apache2.conf /etc/supervisor/conf.d/supervisord-apache2.conf
 ADD supporting_files/supervisord-mysqld.conf /etc/supervisor/conf.d/supervisord-mysqld.conf
 ADD supporting_files/supervisord.conf /etc/supervisor/supervisord.conf
-ADD supporting_files/mysqld_innodb.cnf /etc/mysql/conf.d/mysqld_innodb.cnf
 
 # Remove pre-installed database
 RUN rm -rf /var/lib/mysql
