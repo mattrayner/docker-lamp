@@ -55,7 +55,7 @@ ADD supporting_files/supervisord.conf /etc/supervisor/supervisord.conf
 RUN rm -rf /var/lib/mysql
 
 # Add MySQL utils
-ADD supporting_files/create_mysql_users.sh /create_mysql_users.sh
+ADD supporting_files/mysql_init.sh /mysql_init.sh
 
 # Add phpmyadmin
 RUN wget -O /tmp/phpmyadmin.tar.gz https://files.phpmyadmin.net/phpMyAdmin/${PHPMYADMIN_VERSION}/phpMyAdmin-${PHPMYADMIN_VERSION}-all-languages.tar.gz
