@@ -39,10 +39,10 @@ if [ "$CREATE_MYSQL_USER" = true ]; then
     mysql -uroot -e "GRANT ALL PRIVILEGES ON ${_userdb}.* TO '${_user}'@'%'"
 fi
 
-if [[ -e /db/mysql_init.sql ]]; then
+if [[ -e /db/init.sql ]]; then
     echo "=> Initializing the database"
 
-    mysql -uroot < /db/mysql_init.sql
+    mysql -uroot < /db/init.sql
 fi
 
 echo "=> Done!"

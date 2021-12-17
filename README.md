@@ -130,10 +130,10 @@ Optionally, you can provide a SQL script which will run immediately after MySQL 
 
 Please note that **the SQL initialization script runs only at the container first startup**. The script won't run if MySQL has already been configured (i.e. if the `/var/lib/mysql` contains initialized MySQL data).
 
-The below command will run the docker image `mattrayner/lamp:latest` interactively, exposing port `80` on the host machine with port `80` on the docker container. It will also create a volume linking the `script.sql` file within your current folder to the `/db/mysql_init.sql` file on the container. This is where the container expects the SQL initialization script to live.
+The below command will run the docker image `mattrayner/lamp:latest` interactively, exposing port `80` on the host machine with port `80` on the docker container. It will also create a volume linking the `script.sql` file within your current folder to the `/db/init.sql` file on the container. This is where the container expects the SQL initialization script to live.
 
 ```bash
-docker run -i -t -p "80:80" -v ${PWD}/script.sql:/db/mysql_init.sql:ro mattrayner/lamp:latest
+docker run -i -t -p "80:80" -v ${PWD}/script.sql:/db/init.sql:ro mattrayner/lamp:latest
 ```
 
 ## Adding your own content
