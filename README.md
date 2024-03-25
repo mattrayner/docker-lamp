@@ -21,6 +21,8 @@ With Ubuntu **20.04** and **18.04** images on the `latest-2004` and `latest-1804
     - [Creating a database](#creating-a-database)
       - [PHPMyAdmin](#phpmyadmin)
       - [Command Line](#command-line)
+      - [Initialization script](#initialization-script)
+    - [SQL initialization script](#sql-initialization-script)
 - [Adding your own content](#adding-your-own-content)
   - [Adding your app](#adding-your-app)
   - [Persisting your MySQL](#persisting-your-mysql)
@@ -103,10 +105,11 @@ When you first run the image you'll see a message showing your `admin` user's pa
 If you need this login later, you can run `docker logs CONTAINER_ID` and you should see it at the top of the log.
 
 #### Creating a database
-So your application needs a database - you have two options...
+So your application needs a database - you have three options:
 
 1. PHPMyAdmin
 2. Command line
+3. Initialization script
 
 ##### PHPMyAdmin
 Docker-LAMP comes pre-installed with phpMyAdmin available from `http://DOCKER_ADDRESS/phpmyadmin`.
@@ -119,6 +122,19 @@ First, get the ID of your running container with `docker ps`, then run the below
 docker exec CONTAINER_ID  mysql -uroot -e "create database DATABASE_NAME"
 ```
 
+##### Initialization script
+See the [SQL initialization script section](#sql-initialization-script) for details.
+
+#### SQL initialization script
+Optionally, you can provide a SQL script which will run immediately after MySQL has been installed and configured, allowing you to run custom SQL e.g. to create a database, users or insert custom data.
+
+Please note that **the SQL initialization script runs only at the container first startup**. The script won't run if MySQL has already been configured (i.e. if the `/var/lib/mysql` contains initialized MySQL data).
+
+The below command will run the docker image `mattrayner/lamp:latest` interactively, exposing port `80` on the host machine with port `80` on the docker container. It will also create a volume linking the `script.sql` file within your current folder to the `/db/init.sql` file on the container. This is where the container expects the SQL initialization script to live.
+
+```bash
+docker run -i -t -p "80:80" -v ${PWD}/script.sql:/db/init.sql:ro mattrayner/lamp:latest
+```
 
 ## Adding your own content
 The 'easiest' way to add your own content to the lamp image is using Docker volumes. This will effectively 'sync' a particular folder on your machine with that on the docker container.
