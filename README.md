@@ -53,15 +53,15 @@ Designed to be a single interface that just 'gets out of your way', and works on
 ## Image Versions
 > **NOTE:** [PHP 5.6 is end of life][end-of-life], so the PHP 5 images `mattrayner/lamp:latest-1404-php5` and `mattrayner/lamp:latest-1604-php5` will not receive any updates. Although these images will stay on Docker Hub, we **strongly** recommend updating you applications to PHP 7 or PHP 8.
 
-> **NOTE**: The 14.04 and 16.04 variants of this image are no longer being actively supported or updated.
+> **NOTE**: The 14.04, 16.04 and 18.04 variants of this image are no longer being actively supported or updated.
 
 There are four main 'versions' of the docker image. The table below shows the different tags you can use, along with the PHP, MySQL and Apache versions that come with it.
 
 Component | `latest-1404` | `latest-1604` | `latest-1804-php7` `latest-1804-php8` | `latest-2004-php7` `latest-2004-php8`
 ---|---|---|---|---
 [Apache][apache] | `2.4.7` | `2.4.18` | `2.4.29` | `2.4.41`
-[MySQL][mysql] | `5.5.62` | `5.7.30` | `5.7.35` | `8.0.26`
-[PHP][php] | `7.3.3` | `7.4.6` | `7.4.23`/`8.0.10` | `7.4.23`/`8.0.10`
+[MySQL][mysql] | `5.5.62` | `5.7.30` | `5.7.35` | `8.0.36`
+[PHP][php] | `7.3.3` | `7.4.6` | `7.4.23`/`8.0.10` | `7.4.33`/`8.0.30`
 [phpMyAdmin][phpmyadmin] | `4.8.5` | `5.0.2` | `5.1.1` | `5.1.1`
 
 
@@ -270,6 +270,21 @@ If you wish to submit a bug fix or feature, you can create a pull request and it
 5. Push to the branch (git push origin my-new-feature)
 6. Create a new Pull Request
 
+## Building / Releasing
+Manually building and releasing can be done with the following:
+
+```bash
+docker-compose -f docker-compose.test.yml -p ci build
+docker tag ci-web2004-php8 mattrayner/lamp:latest
+docker tag ci-web2004-php8 mattrayner/lamp:latest-2004
+docker tag ci-web2004-php8 mattrayner/lamp:latest-2004-php8
+docker tag ci-web2004-php7 mattrayner/lamp:latest-2004-php7
+
+docker push mattrayner/lamp:latest
+docker push mattrayner/lamp:latest-2004
+docker push mattrayner/lamp:latest-2004-php8
+docker push mattrayner/lamp:latest-2004-php7
+```
 
 ## License
 Docker-LAMP is licensed under the [Apache 2.0 License][info-license].
