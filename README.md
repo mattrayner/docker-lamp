@@ -44,7 +44,7 @@ With Ubuntu **20.04** and **18.04** images on the `latest-2004` and `latest-1804
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
 ## Introduction
-As a developer, part of my day to day role is to build LAMP applications. I searched in vein for an image that had everything I wanted, up-to-date packages, a simple interface, good documentation and active support. 
+As a developer, part of my day to day role is to build LAMP applications. I searched in vain for an image that had everything I wanted, up-to-date packages, a simple interface, good documentation and active support. 
 
 To complicate things even further I needed an image, or actually two, that would run my applications on both 14.04 and 16.04. Having two entirely separate workflows didn't make any sense to me, and Docker-LAMP was born.
 
