@@ -12,34 +12,38 @@ With Ubuntu **20.04** and **18.04** images on the `latest-2004` and `latest-1804
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
 
-- [Introduction](#introduction)
-- [Image Versions](#image-versions)
-- [Using the image](#using-the-image)
-  - [On the command line](#on-the-command-line)
-  - [With a Dockerfile](#with-a-dockerfile)
-  - [MySQL Databases](#mysql-databases)
-    - [Creating a database](#creating-a-database)
-      - [PHPMyAdmin](#phpmyadmin)
-      - [Command Line](#command-line)
-      - [Initialization script](#initialization-script)
-    - [SQL initialization script](#sql-initialization-script)
-- [Adding your own content](#adding-your-own-content)
-  - [Adding your app](#adding-your-app)
-  - [Persisting your MySQL](#persisting-your-mysql)
-  - [Doing both](#doing-both)
-    - [`.bash_profile` alias examples](#bash_profile-alias-examples)
-      - [Example usage](#example-usage)
-- [Developing the image](#developing-the-image)
-  - [Building and running](#building-and-running)
-  - [Testing](#testing)
-  - [One-line testing command](#one-line-testing-command)
-    - [`docker-compose -f docker-compose.test.yml -p ci build;`](#docker-compose--f-docker-composetestyml--p-ci-build)
-    - [`docker-compose -f docker-compose.test.yml -p ci up -d;`](#docker-compose--f-docker-composetestyml--p-ci-up--d)
-    - [`cd tests && ./test.sh;`](#cd-tests--testsh)
-    - [`echo "Exited with status code: $?"`](#echo-exited-with-status-code-)
-- [Inspiration](#inspiration)
-- [Contributing](#contributing)
-- [License](#license)
+- [](#)
+    - [Contents](#contents)
+  - [Introduction](#introduction)
+  - [Image Versions](#image-versions)
+  - [Using the image](#using-the-image)
+    - [On the command line](#on-the-command-line)
+    - [With a Dockerfile](#with-a-dockerfile)
+    - [MySQL Databases](#mysql-databases)
+      - [Creating a database](#creating-a-database)
+        - [PHPMyAdmin](#phpmyadmin)
+        - [Command Line](#command-line)
+        - [Initialization script](#initialization-script)
+      - [SQL initialization script](#sql-initialization-script)
+  - [Adding your own content](#adding-your-own-content)
+    - [Adding your app](#adding-your-app)
+    - [Persisting your MySQL](#persisting-your-mysql)
+    - [Doing both](#doing-both)
+      - [`.bash_profile` alias examples](#bash_profile-alias-examples)
+        - [Example usage](#example-usage)
+  - [Developing the image](#developing-the-image)
+    - [Building and running](#building-and-running)
+    - [Setup build arch](#setup-build-arch)
+    - [Testing](#testing)
+    - [One-line testing command](#one-line-testing-command)
+      - [`docker-compose -f docker-compose.test.yml -p ci build;`](#docker-compose--f-docker-composetestyml--p-ci-build)
+      - [`docker-compose -f docker-compose.test.yml -p ci up -d;`](#docker-compose--f-docker-composetestyml--p-ci-up--d)
+      - [`cd tests && ./test.sh;`](#cd-tests--testsh)
+      - [`echo "Exited with status code: $?"`](#echo-exited-with-status-code-)
+  - [Inspiration](#inspiration)
+  - [Contributing](#contributing)
+  - [Building / Releasing](#building--releasing)
+  - [License](#license)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -228,6 +232,12 @@ sleep 30
 
 # Curl out the contents of our new container
 curl "http://$(docker-machine ip):3000/"
+```
+### Setup build arch
+On default the image build on arm64 arch using phusion/baseimage:focal-1.1.0, you can use the amd64 if necessary
+
+```bash
+docker build --no-cache --build-arg BASE_IMAGE=ubuntu:20.04 -t n3srl/docker-lamp:latest .
 ```
 
 ### Testing
