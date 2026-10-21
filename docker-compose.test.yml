@@ -1,31 +1,45 @@
-version: "2"
-
 services:
-
-  web2004-php7:
+  web2204:
+    image: docker-lamp-test:2204
     build:
       context: .
-      dockerfile: ./2004/Dockerfile
-      args:
-        - PHP_VERSION=7.4
+      dockerfile: ./2204/Dockerfile
     environment:
-      - MYSQL_ADMIN_PASS=password
+      MYSQL_ADMIN_PASS: test-admin-password-2204
     ports:
-      - "3030:80"
-      - "3031:3306"
+      - "3020:80"
+      - "3021:3306"
     tmpfs:
       - /var/lib/mysql
+    volumes:
+      - ./tests/fixtures:/test-fixtures:ro
 
-  web2004-php8:
+  web2404:
+    image: docker-lamp-test:2404
     build:
       context: .
-      dockerfile: ./2004/Dockerfile
-      args:
-        - PHP_VERSION=8.0
+      dockerfile: ./2404/Dockerfile
     environment:
-      - MYSQL_ADMIN_PASS=password
+      MYSQL_ADMIN_PASS: test-admin-password-2404
     ports:
       - "3040:80"
       - "3041:3306"
     tmpfs:
       - /var/lib/mysql
+    volumes:
+      - ./tests/fixtures:/test-fixtures:ro
+
+  web2604:
+    image: docker-lamp-test:2604
+    build:
+      context: .
+      dockerfile: ./2604/Dockerfile
+    environment:
+      MYSQL_ADMIN_PASS: test-admin-password-2604
+    ports:
+      - "3060:80"
+      - "3061:3306"
+    tmpfs:
+      - /var/lib/mysql
+    volumes:
+      - ./tests/fixtures:/test-fixtures:ro
