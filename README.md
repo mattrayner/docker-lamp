@@ -11,6 +11,8 @@ Composer and Adminer.
 
 - [Image versions](#image-versions)
 - [Using the image](#using-the-image)
+  - [Running without root](#running-without-root)
+- [Application examples](examples/README.md)
 - [MySQL databases](#mysql-databases)
 - [PHP configuration](#php-configuration)
 - [HTTPS](#https)
@@ -40,6 +42,33 @@ Adminer 6.1.2 is included for database administration at `/adminer/`.
 The examples use Ubuntu 24.04. You can substitute either of the other tags
 without changing the commands. Run them from your project directory, with
 Docker installed and running.
+
+### Running without root
+
+Apache, PHP, MySQL, and Supervisor run as user and group `1000:1000`,
+including during startup. There is no root setup step inside the container.
+You don't need `sudo`, `--privileged`, or a `--user` override to run the image.
+Changing the runtime user is not supported.
+
+The quick start uses a fresh Docker-managed MySQL volume and a read-only
+mount for your application. Docker gives the empty volume the permissions
+provided by the image, so you don't need to run `chown`. Your host account
+doesn't need to be UID 1000; your application files just need to be readable
+by the container user. Writable host mounts, such as upload directories or
+an existing database directory, need suitable permissions before startup.
+See [adding your own content](#adding-your-own-content).
+
+Docker access on your machine is separate. These commands assume you can
+already run `docker info` without sudo, using Docker Desktop, a
+[rootless Docker daemon](https://docs.docker.com/engine/security/rootless/),
+or another configured Docker installation. On Linux, joining the `docker`
+group also allows sudo-free commands, but grants effectively root-level
+access to the host; it is not the same as running Docker rootless.
+
+The quick start uses port `8080` on both sides, so it doesn't need privileged
+ports. The [HTTPS example](#https) publishes host ports `80` and `443`, which
+may need extra host configuration with rootless Docker even though Apache
+uses unprivileged ports inside the container.
 
 ### On the command line
 
@@ -94,18 +123,37 @@ intend to delete its databases.
 
 ### Adding your own content
 
-The `app` mount connects your local files to `/app`, where Apache serves
-them. You can edit the files on your machine and see the changes without
-rebuilding. The `:ro` option stops the container from writing back to them.
+The `app` mount is a **bind mount**: your local directory appears at `/app`
+inside the container. It isn't a copy of your code. Edit the files with your
+usual editor and refresh the browser to see the changes, subject to any
+application caching. You don't need to rebuild the image.
+
+The `:ro` option makes the mount read-only **inside the container**. It does
+not stop you editing the files on your machine or change their ownership.
+The mount also hides the image's built-in `/app` files; their ownership does
+not override the permissions on your source directory.
+
+On a standard Linux Docker installation, directories with mode `0755` and
+files with mode `0644` are readable by the container even if your host UID
+isn't 1000. Private directories (`0700`) and files (`0600`) owned by another
+UID are not. Grant access only where needed, especially for files containing
+secrets. Docker Desktop and rootless Docker can map permissions differently;
+check access from inside the container rather than changing ownership blindly.
 
 If your application serves from a `public` directory, add
 `-e APACHE_ROOT=/app/public` before the image name in `docker run`.
 
-The image runs as user and group `1000:1000`. Mounted files must be readable
-by that user, and directories must allow it to traverse them. If your app
-needs to write uploads or cache files, mount a separate writable directory
-prepared for `1000:1000`; don't make the whole application writable. The
-image won't change host ownership or remap its user at startup.
+PHP runs as `1000:1000`. If your app needs to save uploads or cache files,
+give those directories their own writable mounts while leaving the source
+read-only. The image won't repair their permissions at startup. Unlike the
+MySQL volume, a bind-mounted directory keeps the host's permissions.
+
+The [application examples](examples/README.md) show this setup for
+[WordPress](examples/README.md#wordpress),
+[Concrete CMS (concrete5)](examples/README.md#concrete-cms-concrete5), and a
+[PHP app with uploads and a cache](examples/README.md#a-php-app-with-uploads-and-a-cache).
+They also cover checking permissions and the difference between editing code
+on your machine and installing extensions through a CMS dashboard.
 
 ### With a Dockerfile
 
