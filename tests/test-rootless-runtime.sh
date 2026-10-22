@@ -60,6 +60,28 @@ remove_fixture_paths() {
     rm -rf -- "$@"
 }
 
+# Inspect or edit a UID 1000-owned fixture directory as container root, since
+# the host test user cannot traverse it when its UID differs from 1000.
+fixture_sh() {
+    local root=$1 script=$2
+    docker run --rm --user 0:0 --entrypoint /bin/sh \
+        --mount "type=bind,src=${root},dst=/fixture" \
+        "$(runtime_test_image)" -ec "${script}"
+}
+
+fixture_mysql_state() {
+    fixture_sh "$1" 'cat /fixture/.docker-lamp-mysql-state 2>/dev/null || true'
+}
+
+fixture_is_empty() {
+    [[ -z "$(fixture_sh "$1" 'ls -A /fixture')" ]]
+}
+
+# Host-created read-only mounts must be readable by the fixed runtime UID.
+make_fixture_world_readable() {
+    chmod -R a+rX -- "$@"
+}
+
 wait_for_direct_service() {
     local container=$1 attempt apache_status mysql_status
     for ((attempt = 1; attempt <= 60; attempt++)); do
@@ -316,7 +338,7 @@ run_mysql_lifecycle_fixture() {
     restricted_run "${container}" --mount "type=bind,src=${state_root},dst=/var/lib/mysql" \
         -e "MYSQL_ADMIN_PASS=${secret}" -e MYSQL_ADMIN_PASS_FILE=/missing
     assert_container_failed "${container}"
-    [[ -z "$(ls -A "${state_root}")" ]] || fail "${container} mutated a fresh volume before rejecting credentials"
+    fixture_is_empty "${state_root}" || fail "${container} mutated a fresh volume before rejecting credentials"
     ! docker logs "${container}" 2>&1 | grep -Fq "${secret}" \
         || fail "${container} exposed a credential in diagnostics"
     docker rm "${container}" >/dev/null
@@ -325,31 +347,31 @@ run_mysql_lifecycle_fixture() {
     restricted_run "${container}" --mount "type=bind,src=${state_root},dst=/var/lib/mysql" \
         -e MYSQL_BIND_ADDRESS='::ffff:127.0.0.1' -e MYSQL_ADMIN_PASS=ignored
     assert_container_failed "${container}"
-    [[ -z "$(ls -A "${state_root}")" ]] || fail "${container} mutated a fresh volume for a rejected mapped IPv6 address"
+    fixture_is_empty "${state_root}" || fail "${container} mutated a fresh volume for a rejected mapped IPv6 address"
     docker rm "${container}" >/dev/null
 
     container=$(rootless_resource_name "invalid-identifier-${SERVICE}")
     restricted_run "${container}" --mount "type=bind,src=${state_root},dst=/var/lib/mysql" \
         -e MYSQL_ADMIN_PASS=ignored -e MYSQL_USER_NAME='bad user' -e MYSQL_USER_DB=valid -e MYSQL_USER_PASS=ignored
     assert_container_failed "${container}"
-    [[ -z "$(ls -A "${state_root}")" ]] || fail "${container} mutated a fresh volume for a rejected identifier"
+    fixture_is_empty "${state_root}" || fail "${container} mutated a fresh volume for a rejected identifier"
     docker rm "${container}" >/dev/null
 
     container=$(rootless_resource_name "invalid-database-${SERVICE}")
     restricted_run "${container}" --mount "type=bind,src=${state_root},dst=/var/lib/mysql" \
         -e MYSQL_ADMIN_PASS=ignored -e MYSQL_USER_NAME=valid -e MYSQL_USER_DB='a.b' -e MYSQL_USER_PASS=ignored
     assert_container_failed "${container}"
-    [[ -z "$(ls -A "${state_root}")" ]] || fail "${container} mutated a fresh volume for a rejected database identifier"
+    fixture_is_empty "${state_root}" || fail "${container} mutated a fresh volume for a rejected database identifier"
     docker rm "${container}" >/dev/null
 
     container=$(rootless_resource_name "interrupted-init-${SERVICE}")
     restricted_run "${container}" --mount "type=bind,src=${state_root},dst=/var/lib/mysql" \
         -e MYSQL_ADMIN_PASS=phase2-interrupt-password
     for _ in $(seq 1 30); do
-        [[ -f "${state_root}/.docker-lamp-mysql-state" ]] && break
+        [[ -n "$(fixture_mysql_state "${state_root}")" ]] && break
         sleep 1
     done
-    [[ "$(<"${state_root}/.docker-lamp-mysql-state")" == initializing ]] \
+    [[ "$(fixture_mysql_state "${state_root}")" == initializing ]] \
         || { docker logs "${container}" >&2 || true; fail "${container} did not record initializing state"; }
     docker kill "${container}" >/dev/null
     docker rm "${container}" >/dev/null
@@ -467,7 +489,7 @@ run_import_failure_fixture() {
     assert_container_failed "${container}"
     docker logs "${container}" 2>&1 | grep -Fq 'validated initialization import became unavailable' \
         || fail "${container} did not reject an import removed after preflight"
-    [[ "$(<"${state_root}/.docker-lamp-mysql-state")" == initializing ]] \
+    [[ "$(fixture_mysql_state "${state_root}")" == initializing ]] \
         || fail "${container} did not preserve initializing state after import failure"
     docker rm "${container}" >/dev/null
 
@@ -513,7 +535,7 @@ run_ready_legacy_state_fixture() {
     docker stop --time 70 "${second}" >/dev/null
     docker rm "${second}" >/dev/null
 
-    rm "${state_root}/.docker-lamp-mysql-state"
+    fixture_sh "${state_root}" 'rm /fixture/.docker-lamp-mysql-state'
     restricted_run "${third}" --mount "type=bind,src=${state_root},dst=/var/lib/mysql" \
         --mount "type=bind,src=${imports_root},dst=/docker-entrypoint-initdb.d,readonly" \
         -e "MYSQL_ADMIN_PASS=${changed_password}"
@@ -526,7 +548,8 @@ run_ready_legacy_state_fixture() {
     docker stop --time 70 "${third}" >/dev/null
     docker rm "${third}" >/dev/null
 
-    printf '%s\n' broken > "${state_root}/.docker-lamp-mysql-state"
+    fixture_sh "${state_root}" \
+        'printf "%s\n" broken > /fixture/.docker-lamp-mysql-state && chown 1000:1000 /fixture/.docker-lamp-mysql-state'
     restricted_run "${fourth}" --mount "type=bind,src=${state_root},dst=/var/lib/mysql" -e "MYSQL_ADMIN_PASS=${original_password}"
     assert_container_failed "${fourth}"
     ! docker logs "${fourth}" 2>&1 | grep -Fq 'Starting socket-only MySQL' \
@@ -585,13 +608,13 @@ run_term_during_import_fixture() {
     done
     docker logs "${container}" 2>&1 | grep -Fq 'blocking validated import started' \
         || { docker logs "${container}" >&2 || true; fail "${container} did not reach the blocking import"; }
-    [[ "$(<"${state_root}/.docker-lamp-mysql-state")" == initializing ]] \
+    [[ "$(fixture_mysql_state "${state_root}")" == initializing ]] \
         || fail "${container} did not preserve initializing state during import"
     initializer_pid=$(docker exec "${container}" sh -ec "ps -eo pid=,args= | awk '/bash \\/usr\\/local\\/bin\\/mysql-init$/ { print \$1; exit }'")
     [[ -n "${initializer_pid}" ]] || fail "${container} did not expose the initializer process"
     docker exec "${container}" kill -TERM "${initializer_pid}"
     assert_container_failed "${container}"
-    [[ "$(<"${state_root}/.docker-lamp-mysql-state")" == initializing ]] \
+    [[ "$(fixture_mysql_state "${state_root}")" == initializing ]] \
         || fail "${container} changed lifecycle state after TERM during import"
     logs=$(docker logs "${container}" 2>&1)
     [[ "${logs}" != *'supervisord started'* && "${logs}" != *"spawned: 'apache2'"* ]] \
@@ -631,7 +654,7 @@ run_term_during_sql_import_fixture() {
         docker logs "${container}" 2>&1 | grep -Fq 'Running trusted initialization imports in lexical order' \
             || { docker logs "${container}" >&2 || true; fail "${container} did not reach the blocking ${format} import"; }
         sleep 1
-        [[ "$(<"${state_root}/.docker-lamp-mysql-state")" == initializing ]] \
+        [[ "$(fixture_mysql_state "${state_root}")" == initializing ]] \
             || fail "${container} did not preserve initializing state during ${format} import"
         initializer_pid=$(docker exec "${container}" sh -ec "ps -eo pid=,args= | awk '/bash \\/usr\\/local\\/bin\\/mysql-init$/ { print \$1; exit }'")
         [[ -n "${initializer_pid}" ]] || fail "${container} did not expose the initializer process"
@@ -640,7 +663,7 @@ run_term_during_sql_import_fixture() {
         assert_container_failed "${container}"
         elapsed=$((SECONDS - started))
         (( elapsed <= 20 )) || fail "${container} did not bound TERM cleanup for ${format} import (${elapsed}s)"
-        [[ "$(<"${state_root}/.docker-lamp-mysql-state")" == initializing ]] \
+        [[ "$(fixture_mysql_state "${state_root}")" == initializing ]] \
             || fail "${container} changed lifecycle state after TERM during ${format} import"
         logs=$(docker logs "${container}" 2>&1)
         [[ "${logs}" != *'supervisord started'* && "${logs}" != *"spawned: 'apache2'"* ]] \
@@ -670,6 +693,10 @@ run_phase3_transport_php_backup_fixture() {
     stderr_file=$(mktemp)
     printf '%s\n' '<?php echo extension_loaded("xdebug") ? "xdebug=on memory=" . ini_get("memory_limit") : "xdebug=off";' > "${app_root}/xdebug.php"
     printf '%s\n' 'memory_limit = 17M' > "${override_root}/99-phase3.ini"
+    make_fixture_world_readable "${app_root}" "${override_root}"
+    # Keep the TLS directory traversable so the host can read the public cert
+    # for verification after ownership moves to the runtime UID.
+    chmod 0755 "${tls_root}"
     docker run --rm --user 0:0 --entrypoint openssl --mount "type=bind,src=${tls_root},dst=/tls" \
         "$(runtime_test_image)" req -x509 -newkey rsa:2048 -nodes -days 1 \
         -subj /CN=phase3.local -addext subjectAltName=DNS:phase3.local \
