@@ -254,6 +254,7 @@ test_php_runtime_dependencies() {
 
     echo "Checking mod_php configuration and PHP runtime dependencies"
     if ! response=$(curl --fail --silent --show-error --max-time 15 \
+        --header "X-Docker-Lamp-Test-Admin-Password: ${ADMIN_PASSWORD}" \
         "http://127.0.0.1:${WEB_PORT}/runtime-check.php"); then
         fail "Apache PHP runtime dependency check failed"
     fi
@@ -357,7 +358,7 @@ test_remote_admin_login() {
     echo "Checking default loopback-only MySQL policy and unpublished host port"
     ! remote_mysql --execute 'SELECT 1' >/dev/null 2>&1 \
         || fail "${SERVICE} accepted a peer-network MySQL connection with loopback binding"
-    [[ "$(docker inspect --format '{{json .NetworkSettings.Ports}}' "$(compose ps -q "${SERVICE}")")" != *'3306/tcp'* ]] \
+    ! docker port "$(compose ps -q "${SERVICE}")" 3306 >/dev/null 2>&1 \
         || fail "${SERVICE} publishes MySQL to the host by default"
 }
 
@@ -436,7 +437,7 @@ test_fresh_container() {
     compose up --detach --force-recreate --renew-anon-volumes "${SERVICE}"
     wait_for "${SERVICE} MySQL after recreation" mysql_admin_login
 
-    if remote_mysql --skip-column-names --batch --execute \
+    if web_exec env MYSQL_PWD="${ADMIN_PASSWORD}" mysql --protocol=TCP -h 127.0.0.1 -P 3306 -uadmin --skip-column-names --batch --execute \
         "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '${database}'" \
         | grep -Fxq "${database}"; then
         fail "MySQL data persisted after recreating the tmpfs-backed test container"

@@ -79,7 +79,7 @@ $passed = report_check('zip', static function (): bool {
     return $contents === 'zip-content';
 }) && $passed;
 
-$password = getenv('MYSQL_ADMIN_PASS');
+$password = $_SERVER['HTTP_X_DOCKER_LAMP_TEST_ADMIN_PASSWORD'] ?? '';
 $passed = report_check('mysqli', static function () use ($password): bool {
     $mysqli = mysqli_init();
     if (!$mysqli || !mysqli_real_connect($mysqli, '127.0.0.1', 'admin', $password, null, 3306)) {
