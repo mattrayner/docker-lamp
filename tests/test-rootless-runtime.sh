@@ -41,6 +41,25 @@ rootless_resource_name() {
     printf 'docker-lamp-%s-%s' "${COMPOSE_PROJECT}" "$1"
 }
 
+# Fixtures pre-provision host storage for the fixed runtime UID, and MySQL
+# writes UID 1000-owned files into it. When the host user differs (as on CI
+# runners), sticky /tmp blocks removal, so return ownership before deleting.
+remove_fixture_paths() {
+    local entry index=0
+    local -a mounts=() targets=()
+    for entry in "$@"; do
+        [[ -e "${entry}" ]] || continue
+        mounts+=(--mount "type=bind,src=${entry},dst=/cleanup/${index}")
+        targets+=("/cleanup/${index}")
+        index=$((index + 1))
+    done
+    if ((${#targets[@]} > 0)); then
+        docker run --rm --user 0:0 --entrypoint /bin/chown "${mounts[@]}" \
+            "$(runtime_test_image)" -R "$(id -u):$(id -g)" "${targets[@]}" >/dev/null
+    fi
+    rm -rf -- "$@"
+}
+
 wait_for_direct_service() {
     local container=$1 attempt apache_status mysql_status
     for ((attempt = 1; attempt <= 60; attempt++)); do
@@ -153,7 +172,7 @@ run_restricted_source_fixture() {
     ! docker exec "${container}" curl --fail --silent http://127.0.0.1:8080/private.txt >/dev/null 2>&1 \
         || fail "${container} exposed a file outside APACHE_ROOT"
     docker rm --force "${container}" >/dev/null
-    rm -rf "${fixture_root}" "${state_root}"
+    remove_fixture_paths "${fixture_root}" "${state_root}"
 }
 
 run_supervisor_restart_fixture() {
@@ -340,7 +359,7 @@ run_mysql_lifecycle_fixture() {
     ! docker logs "${container}" 2>&1 | grep -Fq 'Starting socket-only MySQL' \
         || fail "${container} replayed interrupted initialization"
     docker rm "${container}" >/dev/null
-    rm -rf "${state_root}"
+    remove_fixture_paths "${state_root}"
 }
 
 run_mysql_bind_fixture() {
@@ -402,7 +421,7 @@ run_mysql_credential_fixture() {
         exit($db && mysqli_query($db, "SELECT 1") ? 0 : 1);
     '
     docker rm --force "${container}" >/dev/null
-    rm -rf "${state_root}" "${secret_root}"
+    remove_fixture_paths "${state_root}" "${secret_root}"
 }
 
 run_import_manifest_fixture() {
@@ -425,7 +444,7 @@ run_import_manifest_fixture() {
         --skip-column-names --batch --execute 'SELECT GROUP_CONCAT(step ORDER BY step) FROM import_order.steps')
     [[ "${result}" == 1,2,3 ]] || fail "${container} did not execute imports in lexical order"
     docker rm --force "${container}" >/dev/null
-    rm -rf "${state_root}" "${imports_root}"
+    remove_fixture_paths "${state_root}" "${imports_root}"
 }
 
 run_import_failure_fixture() {
@@ -458,7 +477,7 @@ run_import_failure_fixture() {
     ! docker logs "${container}" 2>&1 | grep -Fq 'Starting socket-only MySQL' \
         || fail "${container} replayed imports after a failed initialization"
     docker rm "${container}" >/dev/null
-    rm -rf "${state_root}" "${imports_root}"
+    remove_fixture_paths "${state_root}" "${imports_root}"
 }
 
 run_ready_legacy_state_fixture() {
@@ -513,7 +532,7 @@ run_ready_legacy_state_fixture() {
     ! docker logs "${fourth}" 2>&1 | grep -Fq 'Starting socket-only MySQL' \
         || fail "${fourth} initialized an inconsistent volume"
     docker rm "${fourth}" >/dev/null
-    rm -rf "${state_root}" "${imports_root}"
+    remove_fixture_paths "${state_root}" "${imports_root}"
 }
 
 run_unresponsive_init_shutdown_fixture() {
@@ -543,7 +562,7 @@ run_unresponsive_init_shutdown_fixture() {
     docker logs "${container}" 2>&1 | grep -Fq 'forcing termination' \
         || fail "${container} did not force termination of the unresponsive temporary server"
     docker rm "${container}" >/dev/null
-    rm -rf "${state_root}" "${imports_root}"
+    remove_fixture_paths "${state_root}" "${imports_root}"
 }
 
 run_term_during_import_fixture() {
@@ -584,7 +603,7 @@ run_term_during_import_fixture() {
     ! docker logs "${container}" 2>&1 | grep -Fq 'Running trusted initialization imports' \
         || fail "${container} replayed imports after TERM during initialization"
     docker rm "${container}" >/dev/null
-    rm -rf "${state_root}" "${imports_root}"
+    remove_fixture_paths "${state_root}" "${imports_root}"
 }
 
 run_term_during_sql_import_fixture() {
@@ -633,7 +652,7 @@ run_term_during_sql_import_fixture() {
         ! docker logs "${container}" 2>&1 | grep -Fq 'Running trusted initialization imports' \
             || fail "${container} replayed ${format} imports after TERM during initialization"
         docker rm "${container}" >/dev/null
-        rm -rf "${state_root}" "${imports_root}"
+        remove_fixture_paths "${state_root}" "${imports_root}"
     done
 }
 
@@ -722,7 +741,7 @@ run_phase3_transport_php_backup_fixture() {
     docker logs "${invalid}" 2>&1 | grep -Fq 'APACHE_TLS_KEY_FILE must name a readable regular file' \
         || fail "${invalid} did not report invalid TLS material"
     docker rm "${invalid}" >/dev/null
-    rm -rf "${state_root}" "${app_root}" "${override_root}" "${tls_root}" "${dump_file}" "${stderr_file}"
+    remove_fixture_paths "${state_root}" "${app_root}" "${override_root}" "${tls_root}" "${dump_file}" "${stderr_file}"
 }
 
 build_php_artifacts
