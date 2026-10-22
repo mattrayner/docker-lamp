@@ -1,51 +1,54 @@
 services:
   web2204:
-    image: docker-lamp-test:2204
+    image: ${TEST_IMAGE:-docker-lamp-test:2204}
     build:
       context: .
       dockerfile: ./2204/Dockerfile
       args:
-        PHP_ARTIFACT_IMAGE: docker-lamp-php-artifact:2204
+        PHP_ARTIFACT_IMAGE: ${TEST_PHP_ARTIFACT_IMAGE:-docker-lamp-php-artifact:2204}
     environment:
       MYSQL_ADMIN_PASS: test-admin-password-2204
+    user: "1000:1000"
     ports:
-      - "3020:80"
-      - "3021:3306"
+      - "3020:8080"
     tmpfs:
-      - /var/lib/mysql
+      - /var/lib/mysql:uid=1000,gid=1000,mode=0750
     volumes:
       - ./tests/fixtures:/test-fixtures:ro
+      - ./tests/fixtures/apache-test-fixtures.conf:/etc/apache2/conf-enabled/test-fixtures.conf:ro
 
   web2404:
-    image: docker-lamp-test:2404
+    image: ${TEST_IMAGE:-docker-lamp-test:2404}
     build:
       context: .
       dockerfile: ./2404/Dockerfile
       args:
-        PHP_ARTIFACT_IMAGE: docker-lamp-php-artifact:2404
+        PHP_ARTIFACT_IMAGE: ${TEST_PHP_ARTIFACT_IMAGE:-docker-lamp-php-artifact:2404}
     environment:
       MYSQL_ADMIN_PASS: test-admin-password-2404
+    user: "1000:1000"
     ports:
-      - "3040:80"
-      - "3041:3306"
+      - "3040:8080"
     tmpfs:
-      - /var/lib/mysql
+      - /var/lib/mysql:uid=1000,gid=1000,mode=0750
     volumes:
       - ./tests/fixtures:/test-fixtures:ro
+      - ./tests/fixtures/apache-test-fixtures.conf:/etc/apache2/conf-enabled/test-fixtures.conf:ro
 
   web2604:
-    image: docker-lamp-test:2604
+    image: ${TEST_IMAGE:-docker-lamp-test:2604}
     build:
       context: .
       dockerfile: ./2604/Dockerfile
       args:
-        PHP_ARTIFACT_IMAGE: docker-lamp-php-artifact:2604
+        PHP_ARTIFACT_IMAGE: ${TEST_PHP_ARTIFACT_IMAGE:-docker-lamp-php-artifact:2604}
     environment:
       MYSQL_ADMIN_PASS: test-admin-password-2604
+    user: "1000:1000"
     ports:
-      - "3060:80"
-      - "3061:3306"
+      - "3060:8080"
     tmpfs:
-      - /var/lib/mysql
+      - /var/lib/mysql:uid=1000,gid=1000,mode=0750
     volumes:
       - ./tests/fixtures:/test-fixtures:ro
+      - ./tests/fixtures/apache-test-fixtures.conf:/etc/apache2/conf-enabled/test-fixtures.conf:ro

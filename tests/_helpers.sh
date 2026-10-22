@@ -3,7 +3,14 @@
 readonly PROJECT_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
 readonly COMPOSE_FILE="${PROJECT_ROOT}/docker-compose.test.yml"
 readonly COMPOSE_PROJECT="ci"
-readonly VARIANTS=(2204 2404 2604)
+readonly DEFAULT_VARIANTS=(2204 2404 2604)
+if [[ -n "${TEST_VARIANTS:-}" ]]; then
+    # Candidate CI supplies one release variant so it can test one immutable
+    # final-image digest without starting unrelated services.
+    read -r -a VARIANTS <<<"${TEST_VARIANTS}"
+else
+    VARIANTS=("${DEFAULT_VARIANTS[@]}")
+fi
 
 SERVICE=''
 OS_VERSION=''
@@ -89,14 +96,33 @@ wait_for() {
 }
 
 start_fresh_stack() {
+    local -a services=()
+    local variant
+
     # The ci project is removed before each suite, so every variant starts with
     # an empty tmpfs-backed MySQL data directory.
     compose down --volumes --remove-orphans || true
-    compose up --detach --build --force-recreate --renew-anon-volumes
+    for variant in "${VARIANTS[@]}"; do
+        services+=("web${variant}")
+    done
+
+    if [[ "${PREBUILT_FINAL_IMAGES:-0}" == 1 ]]; then
+        : "${TEST_IMAGE:?TEST_IMAGE must identify the prebuilt final image.}"
+        [[ ${#VARIANTS[@]} -eq 1 ]] || fail "prebuilt final-image tests require exactly one TEST_VARIANTS entry"
+        compose pull "${services[@]}"
+        compose up --detach --no-build --force-recreate --renew-anon-volumes "${services[@]}"
+    else
+        compose up --detach --build --force-recreate --renew-anon-volumes "${services[@]}"
+    fi
 }
 
 build_php_artifacts() {
     local variant os_version artifact_image
+
+    if [[ "${PREBUILT_PHP_ARTIFACTS:-0}" == 1 ]]; then
+        : "${TEST_PHP_ARTIFACT_IMAGE:?TEST_PHP_ARTIFACT_IMAGE must identify the prebuilt PHP artifact.}"
+        return
+    fi
 
     : "${DOCKER_DEFAULT_PLATFORM:?DOCKER_DEFAULT_PLATFORM must be set (for example, linux/amd64 or linux/arm64).}"
 
@@ -136,10 +162,9 @@ http_page_available() {
 
 install_test_fixtures() {
     web_exec sh -ec '
-        rm -rf /app/rewrite-check
-        cp -R /test-fixtures/rewrite-check /app/rewrite-check
-        cp /test-fixtures/static-check.txt /app/static-check.txt
-        cp /test-fixtures/runtime-check.php /app/runtime-check.php
+        test -r /test-fixtures/rewrite-check/.htaccess
+        test -r /test-fixtures/static-check.txt
+        test -r /test-fixtures/runtime-check.php
     '
 }
 
@@ -176,7 +201,17 @@ test_apache_php_and_rewrite() {
     local response apache_php_version
 
     echo "Checking Apache, mod_rewrite, and Apache PHP >= 8.5.12"
-    web_exec apache2ctl -M | grep -Eq 'rewrite_module.*shared'
+    web_exec bash -ec '
+        export APACHE_CONFDIR=/etc/apache2
+        . /etc/apache2/envvars
+        export APACHE_RUN_USER=lamp
+        export APACHE_RUN_GROUP="$(id -gn lamp)"
+        export APACHE_RUN_DIR=/run/lamp/apache2
+        export APACHE_PID_FILE=/run/lamp/apache2/apache2.pid
+        export APACHE_LOCK_DIR=/run/lamp/apache2
+        export APACHE_LOG_DIR=/run/lamp/apache2
+        apache2 -M
+    ' | grep -Eq 'rewrite_module.*shared'
 
     response=$(curl --fail --silent --show-error --max-time 10 \
         "http://127.0.0.1:${WEB_PORT}/rewrite-check/php85")
@@ -319,11 +354,11 @@ test_openssl() {
 }
 
 test_remote_admin_login() {
-    echo "Checking remote TCP admin login and MYSQL_ADMIN_PASS initialization"
-    remote_mysql --execute 'SELECT 1'
-    ! compose run --rm --no-deps -T --env 'MYSQL_PWD=password' "${SERVICE}" \
-        mysql --protocol=TCP -h "${SERVICE}" -P 3306 -uadmin --connect-timeout=5 \
-        --execute 'SELECT 1' >/dev/null 2>&1
+    echo "Checking default loopback-only MySQL policy and unpublished host port"
+    ! remote_mysql --execute 'SELECT 1' >/dev/null 2>&1 \
+        || fail "${SERVICE} accepted a peer-network MySQL connection with loopback binding"
+    [[ "$(docker inspect --format '{{json .NetworkSettings.Ports}}' "$(compose ps -q "${SERVICE}")")" != *'3306/tcp'* ]] \
+        || fail "${SERVICE} publishes MySQL to the host by default"
 }
 
 test_supervisor_apache_recovery() {
@@ -396,7 +431,8 @@ test_fresh_container() {
     local database="docker_lamp_freshness_check"
 
     echo "Checking fresh-container database initialization"
-    remote_mysql --execute "CREATE DATABASE ${database}"
+    web_exec env MYSQL_PWD="${ADMIN_PASSWORD}" mysql --protocol=TCP -h 127.0.0.1 -P 3306 -uadmin \
+        --execute "CREATE DATABASE ${database}"
     compose up --detach --force-recreate --renew-anon-volumes "${SERVICE}"
     wait_for "${SERVICE} MySQL after recreation" mysql_admin_login
 
@@ -406,5 +442,5 @@ test_fresh_container() {
         fail "MySQL data persisted after recreating the tmpfs-backed test container"
     fi
 
-    remote_mysql --execute 'SELECT 1'
+    mysql_admin_login
 }

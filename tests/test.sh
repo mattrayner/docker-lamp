@@ -41,3 +41,7 @@ for variant in "${VARIANTS[@]}"; do
 
     echo "All ${OS_VERSION} image checks passed."
 done
+
+if [[ "${RUN_ROOTLESS_RUNTIME_TESTS:-0}" == 1 ]]; then
+    "${SCRIPT_DIR}/test-rootless-runtime.sh"
+fi

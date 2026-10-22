@@ -23,7 +23,7 @@ phpMyAdmin is deliberately omitted because it is not part of the PHP 8.5-compati
 Choose the Ubuntu base appropriate for your application and mount its source at `/app`:
 
 ```bash
-docker run --rm -p 8080:80 -p 3306:3306 \
+docker run --rm -p 8080:8080 -p 3306:3306 \
   -e MYSQL_ADMIN_PASS='choose-a-strong-password' \
   -v "${PWD}/app:/app" \
   mattrayner/lamp:latest-2404-php8.5
@@ -41,7 +41,7 @@ To persist a database, use a new named volume for the selected variant:
 
 ```bash
 docker volume create docker-lamp-mysql-2404
-docker run --rm -p 8080:80 -p 3306:3306 \
+docker run --rm -p 8080:8080 -p 3306:3306 \
   -e MYSQL_ADMIN_PASS='choose-a-strong-password' \
   -v "${PWD}/app:/app" \
   -v docker-lamp-mysql-2404:/var/lib/mysql \
@@ -75,18 +75,33 @@ docker compose -f docker-compose.test.yml -p ci down --volumes --remove-orphans
 
 `tests/test.sh` starts from a fresh `ci` test project, then runs the same behavioral suite against every Ubuntu variant. It uses bounded waits for Apache, Supervisor, and MySQL, prints redacted Compose logs on timeout or failure, and checks behavior and versions rather than a full HTML package snapshot. The suite also verifies the `/adminer/` login form and a credentialed local Adminer session without printing credentials.
 
+CI can test one already-pushed candidate without rebuilding it by setting
+`TEST_VARIANTS` to its Ubuntu variant, `TEST_IMAGE` to its immutable final
+image reference (for example `repository/lamp@sha256:...`), and
+`TEST_PHP_ARTIFACT_IMAGE` to its immutable PHP artifact reference. Set both
+`PREBUILT_FINAL_IMAGES=1` and `PREBUILT_PHP_ARTIFACTS=1`; this makes the test
+runner pull only the selected final service and use `--no-build`. These inputs
+are for candidate CI and do not change the default local workflow above.
+
+Run the slower rootless runtime/remediation suite explicitly when changing container startup, permissions, or process supervision:
+
+```bash
+RUN_ROOTLESS_RUNTIME_TESTS=1 ./tests/test.sh
+```
+
 ## Building and releasing
 
-When the releases are approved, build and test all variants before publishing their explicit tags. Publish the versioned multi-architecture PHP artifacts first, then build each final image with its corresponding immutable `PHP_ARTIFACT_IMAGE` build argument:
+When releases are approved, build and test all variants before publishing their explicit tags. PHP artifact manifests are release-qualified and immutable: `8.5.12-ubuntu<version>-r1-<release-tag>`. Publish them first, then build each final image with its corresponding immutable `PHP_ARTIFACT_IMAGE` build argument:
 
 ```bash
 ./tests/test.sh
 
+RELEASE_TAG=v1.2.3
 docker buildx build --platform linux/amd64,linux/arm64 --target artifact \
   --build-arg UBUNTU_VERSION=22.04 --build-arg PHP_VERSION=8.5.12 \
-  -f php-builder/Dockerfile -t mattrayner/lamp-php:8.5.12-ubuntu22.04-r1 --push .
+  -f php-builder/Dockerfile -t mattrayner/lamp-php:8.5.12-ubuntu22.04-r1-${RELEASE_TAG} --push .
 
-docker build --build-arg PHP_ARTIFACT_IMAGE=mattrayner/lamp-php:8.5.12-ubuntu22.04-r1 \
+docker build --build-arg PHP_ARTIFACT_IMAGE=mattrayner/lamp-php:8.5.12-ubuntu22.04-r1-${RELEASE_TAG} \
   -f 2204/Dockerfile -t mattrayner/lamp:latest-2204-php8.5 .
 ```
 

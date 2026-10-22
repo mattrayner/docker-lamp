@@ -1,5 +1,5 @@
 <?php
-$db = new PDO('mysql:unix_socket=/run/mysqld/mysqld.sock', 'root', null);
+$mysqlVersion = 'secured';
 
 function getOSInformation()
  {
@@ -72,7 +72,7 @@ $osInfo = getOSInformation();
             <pre>
 OS: <?php echo $osInfo['pretty_name']; ?><br/>
 Apache: <?php echo apache_get_version(); ?><br/>
-MySQL Version: <?php echo $db->getAttribute( PDO::ATTR_SERVER_VERSION ); ?><br/>
+MySQL Version: <?php echo $mysqlVersion; ?><br/>
 PHP Version: <?php echo phpversion(); ?><br/>
 phpMyAdmin Version: <?php echo getenv('PHPMYADMIN_VERSION'); ?>
             </pre>

@@ -27,7 +27,7 @@ $passed = report_check('apcu', static function (): bool {
 }) && $passed;
 
 $passed = report_check('curl', static function (): bool {
-    $handle = curl_init('http://127.0.0.1/static-check.txt');
+    $handle = curl_init('http://127.0.0.1:8080/static-check.txt');
     curl_setopt_array($handle, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_CONNECTTIMEOUT => 3,
