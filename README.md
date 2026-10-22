@@ -20,33 +20,135 @@ phpMyAdmin is deliberately omitted because it is not part of the PHP 8.5.12-comp
 
 ## Usage
 
-Choose the Ubuntu base appropriate for your application and mount its source at `/app`:
+The examples below use the Ubuntu 24.04 image. Replace
+`latest-2404-php8.5` with `latest-2204-php8.5` or
+`latest-2604-php8.5` when needed. All container processes use UID:GID
+`1000:1000`; mount application code read-only and use a new named volume for
+MySQL unless an operator has already prepared a writable `1000:1000` host
+directory.
 
-```bash
-docker run --rm -p 80:8080 \
-  -e MYSQL_ADMIN_PASS='choose-a-strong-password' \
-  -v "${PWD}/app:/app:ro" \
-  mattrayner/lamp:latest-2404-php8.5
+### On the command line
+
+1. Create a small application directory:
+
+   ```bash
+   mkdir -p app
+   printf '<?php phpinfo();\n' > app/index.php
+   ```
+
+2. Create a named volume for this image generation's MySQL data:
+
+   ```bash
+   docker volume create docker-lamp-mysql-2404
+   ```
+
+3. Start the image. The first startup creates the local MySQL `admin` account
+   with the password supplied in `MYSQL_ADMIN_PASS`:
+
+   ```bash
+   docker run --name docker-lamp --rm -p 80:8080 \
+     -e MYSQL_ADMIN_PASS='choose-a-strong-password' \
+     -v "${PWD}/app:/app:ro" \
+     -v docker-lamp-mysql-2404:/var/lib/mysql \
+     mattrayner/lamp:latest-2404-php8.5
+   ```
+
+4. Open `http://localhost/`. Apache listens on container port `8080`; the
+   host mapping above keeps the familiar port `80` URL. Stop the foreground
+   container with `Ctrl-C`, or add `-d` to run it in the background.
+
+MySQL port `3306` is not published by default. Do not add a port mapping just
+for local administration: use Adminer or `docker exec`. Publishing MySQL is an
+advanced, first-run configuration that also requires an explicit non-loopback
+`MYSQL_BIND_ADDRESS`.
+
+### With a Dockerfile
+
+Use a Dockerfile when the application and its dependencies should travel with
+the image instead of a bind mount:
+
+```dockerfile
+FROM mattrayner/lamp:latest-2404-php8.5
+
+COPY --chown=1000:1000 app/ /app/
 ```
 
-Replace `latest-2404-php8.5` with `latest-2204-php8.5` or `latest-2604-php8.5` as required. The first startup creates the `admin` MySQL user using `MYSQL_ADMIN_PASS`. Apache listens on container port `8080`; MySQL remains unpublished unless an operator explicitly maps port `3306` and uses a non-loopback `MYSQL_BIND_ADDRESS`.
-
-### Adminer for beginners
-
-Open `http://localhost:8080/adminer/` after starting the container. The login page pre-fills the server as `localhost`; sign in with username `admin` and the value supplied in `MYSQL_ADMIN_PASS`. Adminer does not store or bypass credentials, and the image verifies the bundled Adminer 6.1.2 MySQL-only file by SHA-256 during its build.
-
-Adminer is a powerful database administration tool. Treat `/adminer/` as a development convenience: do not publish it to an untrusted network, use a strong `MYSQL_ADMIN_PASS`, and place authentication or network controls in front of it if it must be reachable outside a local development machine.
-
-To persist a database, use a new named volume for the selected variant:
+Build and run it with the same named volume and first-run password:
 
 ```bash
-docker volume create docker-lamp-mysql-2404
-docker run --rm -p 80:8080 \
+docker build -t my-lamp-app .
+docker run --name my-lamp-app --rm -p 80:8080 \
+  -e MYSQL_ADMIN_PASS='choose-a-strong-password' \
+  -v docker-lamp-mysql-2404:/var/lib/mysql \
+  my-lamp-app
+```
+
+### MySQL databases
+
+#### Adminer
+
+Open `http://localhost/adminer/`. The login page pre-fills `localhost`; sign
+in as `admin` with the value supplied in `MYSQL_ADMIN_PASS`. Adminer is a
+development convenience, not an authentication boundary: do not publish it to
+an untrusted network, and put network controls or authentication in front of
+it when necessary.
+
+#### Command line
+
+Create a database from the running container:
+
+```bash
+docker exec docker-lamp env MYSQL_PWD='choose-a-strong-password' \
+  mysql --protocol=socket --socket=/run/mysql/mysqld.sock -uadmin \
+  -e 'CREATE DATABASE my_application'
+```
+
+For an application account on a fresh volume, provide all three variables at
+first startup: `MYSQL_USER_NAME`, `MYSQL_USER_DB`, and `MYSQL_USER_PASS` (or
+the corresponding `*_FILE` password input). Existing ready volumes do not
+change accounts or passwords from later environment values.
+
+#### Initialization scripts
+
+Mount trusted initialization files at `/docker-entrypoint-initdb.d:ro` before
+the first startup. Files run once, in lexical order: `.sql`, `.sql.gz`, and
+executable hook files are supported.
+
+```bash
+mkdir -p mysql-init
+printf 'CREATE DATABASE my_application;\n' > mysql-init/10-create-database.sql
+
+docker run --name docker-lamp --rm -p 80:8080 \
   -e MYSQL_ADMIN_PASS='choose-a-strong-password' \
   -v "${PWD}/app:/app:ro" \
+  -v "${PWD}/mysql-init:/docker-entrypoint-initdb.d:ro" \
   -v docker-lamp-mysql-2404:/var/lib/mysql \
   mattrayner/lamp:latest-2404-php8.5
 ```
+
+Initialization imports are not a migration or recovery mechanism. They never
+replay on a ready volume; interrupted or inconsistent initialization fails
+closed and should be recovered into a fresh volume from a tested logical
+backup.
+
+### Persisting and moving MySQL data
+
+The named-volume example above persists data across container replacement. Do
+not copy a live MySQL data directory or mount a legacy Ubuntu 20.04 data
+directory into these images. Take a logical backup and restore it into a new
+volume instead:
+
+```bash
+docker exec docker-lamp env MYSQL_ADMIN_PASS='choose-a-strong-password' \
+  docker-lamp-backup --database my_application > my_application.sql
+
+docker exec -i docker-lamp env MYSQL_ADMIN_PASS='choose-a-strong-password' \
+  docker-lamp-restore --database my_application < my_application.sql
+```
+
+The target database must already exist. Backup and restore accept trusted SQL
+only; see the recovery guidance below for their consistency and recovery
+limits.
 
 ### HTTPS, PHP configuration, and backups
 
