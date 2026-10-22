@@ -39,9 +39,6 @@ jobs:
           # Release builds must test the exact tag being published.
           ref: ${{ github.event.release.tag_name || inputs.ref || github.sha }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Run ${{ matrix.platform }} integration suite
         env:
           DOCKER_DEFAULT_PLATFORM: ${{ matrix.platform }}
