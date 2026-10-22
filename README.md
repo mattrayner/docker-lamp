@@ -1,229 +1,359 @@
 # Docker-LAMP
 
-Docker-LAMP packages Apache, MySQL, and PHP in one development image. The current image line provides PHP 8.5.12 and MySQL 9.7 LTS on Ubuntu 22.04, 24.04, and 26.04. PHP 8.5.12 is the minimum supported PHP version for this image line because earlier versions have security issues.
+Docker-LAMP runs Apache, MySQL, and PHP together in one container. Mount your
+application at `/app`, give MySQL a volume, and you're ready to work.
+
+The images use PHP 8.5.12 and MySQL 9.7 LTS, with a choice of Ubuntu
+22.04, 24.04, or 26.04. Each image supports amd64 and arm64 and includes
+Composer and Adminer.
+
+## Contents
+
+- [Image versions](#image-versions)
+- [Using the image](#using-the-image)
+- [MySQL databases](#mysql-databases)
+- [PHP configuration](#php-configuration)
+- [HTTPS](#https)
+- [Kubernetes](#kubernetes)
+- [Development](#development)
+- [Building and releasing](#building-and-releasing)
 
 ## Image versions
 
-| Image | Ubuntu | PHP | MySQL | Database UI | Support |
-| --- | --- | --- | --- | --- | --- |
-| `latest-2204-php8.5` (planned release) | 22.04 LTS | 8.5.12 | 9.7 LTS | Adminer 6.1.2 at `/adminer/` | Current |
-| `latest-2404-php8.5` (planned release) | 24.04 LTS | 8.5.12 | 9.7 LTS | Adminer 6.1.2 at `/adminer/` | Current |
-| `latest-2604-php8.5` (planned release) | 26.04 LTS | 8.5.12 | 9.7 LTS | Adminer 6.1.2 at `/adminer/` | Current |
-| `latest-2004-php8` | 20.04 LTS | 8.0 | 8.0 | phpMyAdmin 5.1.1 | Unsupported legacy image |
-| `latest-2004-php7` | 20.04 LTS | 7.4 | 8.0 | phpMyAdmin 5.1.1 | Unsupported legacy image |
+The tags below are not yet published. To build and test locally, follow
+the [development instructions](#development).
 
-PHP 7 is end of life and excluded from this image line. The Ubuntu 20.04 PHP 7 and PHP 8 images are unsupported legacy images and receive no fixes or feature work. There are no PHP 7 tags for Ubuntu 22.04, 24.04, or 26.04, and no generic Ubuntu release tags; use an explicit PHP 8.5 tag, which provides PHP 8.5.12.
+| Tag | Ubuntu | PHP | MySQL |
+| --- | --- | --- | --- |
+| `mattrayner/lamp:latest-2204-php8.5` | 22.04 LTS | 8.5.12 | 9.7 LTS |
+| `mattrayner/lamp:latest-2404-php8.5` | 24.04 LTS | 8.5.12 | 9.7 LTS |
+| `mattrayner/lamp:latest-2604-php8.5` | 26.04 LTS | 8.5.12 | 9.7 LTS |
 
-phpMyAdmin is deliberately omitted because it is not part of the PHP 8.5.12-compatible image stack. The PHP 8.5.12 images bundle the smaller MySQL-only Adminer 6.1.2 asset instead.
+Use the full PHP 8.5 tag rather than `latest` or a generic Ubuntu tag.
+PHP 8.5.12 is the minimum supported version. Images for other PHP generations
+are unsupported, even if their tags are still available on Docker Hub.
 
-> **Migration warning:** do not mount an existing 20.04 MySQL data directory into a newer image. Take a logical backup (for example, `mysqldump`) from the 20.04 container and restore it into a new 22.04, 24.04, or 26.04 MySQL volume.
+Adminer 6.1.2 is included for database administration at `/adminer/`.
 
-## Usage
+## Using the image
 
-The examples below use the Ubuntu 24.04 image. Replace
-`latest-2404-php8.5` with `latest-2204-php8.5` or
-`latest-2604-php8.5` when needed. All container processes use UID:GID
-`1000:1000`; mount application code read-only and use a new named volume for
-MySQL unless an operator has already prepared a writable `1000:1000` host
-directory.
+The examples use Ubuntu 24.04. You can substitute either of the other tags
+without changing the commands. Run them from your project directory, with
+Docker installed and running.
 
 ### On the command line
 
-1. Create a small application directory:
+1. Put your PHP files in an `app` directory. To try the image in an empty
+   project, create a simple page:
 
    ```bash
    mkdir -p app
-   printf '<?php phpinfo();\n' > app/index.php
+   printf '%s\n' '<?php echo "Hello from Docker-LAMP";' > app/index.php
    ```
 
-2. Create a named volume for this image generation's MySQL data:
+2. Create a volume for MySQL. This keeps your databases when you replace the
+   container:
 
    ```bash
    docker volume create docker-lamp-mysql-2404
    ```
 
-3. Start the image. The first startup creates the local MySQL `admin` account
-   with the password supplied in `MYSQL_ADMIN_PASS`:
+3. Start the container. Replace the example password with your own:
 
    ```bash
-   docker run --name docker-lamp --rm -p 80:8080 \
+   docker run --detach --name docker-lamp --stop-timeout 75 \
+     -p 127.0.0.1:8080:8080 \
      -e MYSQL_ADMIN_PASS='choose-a-strong-password' \
      -v "${PWD}/app:/app:ro" \
      -v docker-lamp-mysql-2404:/var/lib/mysql \
      mattrayner/lamp:latest-2404-php8.5
    ```
 
-4. Open `http://localhost/`. Apache listens on container port `8080`; the
-   host mapping above keeps the familiar port `80` URL. Stop the foreground
-   container with `Ctrl-C`, or add `-d` to run it in the background.
+4. Give MySQL time to finish its first startup, then open
+   [http://localhost:8080/](http://localhost:8080/). If the page isn't ready,
+   check the startup log:
 
-MySQL port `3306` is not published by default. Do not add a port mapping just
-for local administration: use Adminer or `docker exec`. Publishing MySQL is an
-advanced, first-run configuration that also requires an explicit non-loopback
-`MYSQL_BIND_ADDRESS`.
+   ```bash
+   docker logs docker-lamp
+   ```
+
+This publishes the site only on your own machine. Apache uses port `8080`
+inside the container; to use a different host port, change the middle number
+in `127.0.0.1:8080:8080`.
+
+Stop and start it again with:
+
+```bash
+docker stop docker-lamp
+docker start docker-lamp
+```
+
+Your database stays in the named volume. `docker rm docker-lamp` removes a
+stopped container, not that volume. Don't delete the volume unless you also
+intend to delete its databases.
+
+### Adding your own content
+
+The `app` mount connects your local files to `/app`, where Apache serves
+them. You can edit the files on your machine and see the changes without
+rebuilding. The `:ro` option stops the container from writing back to them.
+
+If your application serves from a `public` directory, add
+`-e APACHE_ROOT=/app/public` before the image name in `docker run`.
+
+The image runs as user and group `1000:1000`. Mounted files must be readable
+by that user, and directories must allow it to traverse them. If your app
+needs to write uploads or cache files, mount a separate writable directory
+prepared for `1000:1000`; don't make the whole application writable. The
+image won't change host ownership or remap its user at startup.
 
 ### With a Dockerfile
 
-Use a Dockerfile when the application and its dependencies should travel with
-the image instead of a bind mount:
+To package your code with the image rather than mount it, put this Dockerfile
+beside your `app` directory:
 
 ```dockerfile
 FROM mattrayner/lamp:latest-2404-php8.5
 
-COPY --chown=1000:1000 app/ /app/
+COPY --chown=0:0 app/ /app/
 ```
 
-Build and run it with the same named volume and first-run password:
+Keep the copied files readable by the runtime user, but not writable by its
+group or by everyone. The base image already supplies the startup command
+and non-root user.
+
+Build it, then stop the quick-start container before reusing its database
+volume:
 
 ```bash
 docker build -t my-lamp-app .
-docker run --name my-lamp-app --rm -p 80:8080 \
+docker stop docker-lamp
+docker run --detach --name my-lamp-app --stop-timeout 75 \
+  -p 127.0.0.1:8080:8080 \
   -e MYSQL_ADMIN_PASS='choose-a-strong-password' \
   -v docker-lamp-mysql-2404:/var/lib/mysql \
   my-lamp-app
 ```
 
-### MySQL databases
+This is an alternative to the quick start, not a second server for the same
+data. Never run two containers against the same MySQL volume. The examples
+below use the quick-start container name, `docker-lamp`; substitute yours if
+you chose a different name.
 
-#### Adminer
+## MySQL databases
 
-Open `http://localhost/adminer/`. The login page pre-fills `localhost`; sign
-in as `admin` with the value supplied in `MYSQL_ADMIN_PASS`. Adminer is a
-development convenience, not an authentication boundary: do not publish it to
-an untrusted network, and put network controls or authentication in front of
-it when necessary.
+On an empty volume, the image creates an `admin` account using
+`MYSQL_ADMIN_PASS`. There is no passwordless root login and no generated
+password to retrieve from the logs. Changing the environment later does
+not change accounts or passwords in an existing database.
 
-#### Command line
+For a password stored in a mounted file, set `MYSQL_ADMIN_PASS_FILE` instead
+of `MYSQL_ADMIN_PASS`. The file must contain one non-empty line and be
+readable by `1000:1000`. Use one setting or the other, not both, and keep
+password files out of version control.
 
-Create a database from the running container:
+### Adminer
+
+Open [http://localhost:8080/adminer/](http://localhost:8080/adminer/).
+Leave the server as `localhost` and log in as `admin` with the password you
+chose. You can create databases and run SQL from there.
+
+Adminer gives access to your databases. Keep it private; if you publish the
+site beyond your machine, restrict access to `/adminer/` through your proxy
+or network rules.
+
+### Creating a database from the command line
+
+This asks for your admin password, then creates `my_application`:
 
 ```bash
-docker exec docker-lamp env MYSQL_PWD='choose-a-strong-password' \
-  mysql --protocol=socket --socket=/run/mysql/mysqld.sock -uadmin \
+docker exec -it docker-lamp mysql \
+  --protocol=socket --socket=/run/mysql/mysqld.sock -uadmin -p \
   -e 'CREATE DATABASE my_application'
 ```
 
-For an application account on a fresh volume, provide all three variables at
-first startup: `MYSQL_USER_NAME`, `MYSQL_USER_DB`, and `MYSQL_USER_PASS` (or
-the corresponding `*_FILE` password input). Existing ready volumes do not
-change accounts or passwords from later environment values.
+You can also create a database and a separate application account at first
+startup. Set `MYSQL_USER_NAME`, `MYSQL_USER_DB`, and `MYSQL_USER_PASS`
+together when starting with an empty volume. `MYSQL_USER_PASS_FILE` can
+replace the password value. Use this account in your app rather than `admin`.
 
-#### Initialization scripts
+MySQL listens on `127.0.0.1` inside the container by default. PHP and Adminer
+can connect without publishing port `3306`. To allow an external database
+client, you also need a non-loopback `MYSQL_BIND_ADDRESS` and an account
+permitted to connect remotely; publishing the port alone isn't enough. See
+the [storage and recovery guide](docs/kubernetes.md) before changing this.
 
-Mount trusted initialization files at `/docker-entrypoint-initdb.d:ro` before
-the first startup. Files run once, in lexical order: `.sql`, `.sql.gz`, and
-executable hook files are supported.
+### Initialization scripts
+
+To set up a database, you can supply SQL files in
+`/docker-entrypoint-initdb.d`. They run once, in filename order, before the
+web server starts. The directory can contain `.sql`, `.sql.gz`, and readable
+executable scripts. Only mount files you trust.
+
+This example uses a separate, empty volume. If you have already followed the
+quick start, stop that container first to free port `8080`:
 
 ```bash
+docker stop docker-lamp
 mkdir -p mysql-init
 printf 'CREATE DATABASE my_application;\n' > mysql-init/10-create-database.sql
+docker volume create docker-lamp-mysql-init-2404
 
-docker run --name docker-lamp --rm -p 80:8080 \
+docker run --detach --name docker-lamp-init --stop-timeout 75 \
+  -p 127.0.0.1:8080:8080 \
   -e MYSQL_ADMIN_PASS='choose-a-strong-password' \
   -v "${PWD}/app:/app:ro" \
   -v "${PWD}/mysql-init:/docker-entrypoint-initdb.d:ro" \
-  -v docker-lamp-mysql-2404:/var/lib/mysql \
+  -v docker-lamp-mysql-init-2404:/var/lib/mysql \
   mattrayner/lamp:latest-2404-php8.5
 ```
 
-Initialization imports are not a migration or recovery mechanism. They never
-replay on a ready volume; interrupted or inconsistent initialization fails
-closed and should be recovered into a fresh volume from a tested logical
-backup.
+Reusing a volume that already contains a database will not rerun these files.
+If initialization is interrupted, the image refuses to start that database
+again. Follow the [recovery guide](docs/kubernetes.md#migration-and-recovery-lifecycle)
+rather than deleting its state marker or trying to replay the imports.
 
-### Persisting and moving MySQL data
+### Backups and restores
 
-The named-volume example above persists data across container replacement. Do
-not copy a live MySQL data directory or mount a legacy Ubuntu 20.04 data
-directory into these images. Take a logical backup and restore it into a new
-volume instead:
+For the database created above, replace `CONTAINER` with `docker-lamp` or
+`docker-lamp-init`, as appropriate:
 
 ```bash
-docker exec docker-lamp env MYSQL_ADMIN_PASS='choose-a-strong-password' \
-  docker-lamp-backup --database my_application > my_application.sql
-
-docker exec -i docker-lamp env MYSQL_ADMIN_PASS='choose-a-strong-password' \
-  docker-lamp-restore --database my_application < my_application.sql
+docker exec CONTAINER docker-lamp-backup --database my_application > my_application.sql
+docker exec -i CONTAINER docker-lamp-restore --database my_application < my_application.sql
 ```
 
-The target database must already exist. Backup and restore accept trusted SQL
-only; see the recovery guidance below for their consistency and recovery
-limits.
+The tools use the admin password or password-file setting supplied when the
+container was created. The backup goes to stdout and diagnostics go to
+stderr. Restore reads stdin, or you can use `--input /path/inside/container.sql`.
 
-### HTTPS, PHP configuration, and backups
+To move a database, back it up from the source container, start the destination
+container with an empty volume, create the target database, then restore into
+it. If the source image doesn't include these helpers, use `mysqldump`.
+When changing MySQL versions, transfer data this way rather than attaching
+the source data directory to the destination container.
 
-External TLS termination is the recommended production setup: the proxy owns public ports `80`/`443`, certificates, and redirects, then forwards HTTP to container port `8080`. Native TLS is available only when explicitly enabled and maps public `443` to container `8443`:
+Restore runs SQL as `admin`: it can overwrite data, affect other databases,
+and leave partial changes if a statement fails. Only restore trusted dumps.
+It requires an existing target database and does not create or empty it for
+you. Avoid schema changes during backup, arrange a quiet period for
+non-transactional tables, and never back up by copying a live data directory.
+
+## PHP configuration
+
+Put your extra `.ini` files in a local directory and mount it at
+`/etc/docker-lamp/php/conf.d:ro`. Files load in filename order after the
+image's settings. For example, a file named `99-app.ini` could contain:
+
+```ini
+memory_limit = 256M
+upload_max_filesize = 20M
+post_max_size = 20M
+```
+
+If an override causes trouble, recreate the container with
+`PHP_USER_OVERRIDES_DISABLED=1` to skip that directory without disabling the
+image's PHP configuration.
+
+Xdebug is off by default. Add `-e XDEBUG_ENABLED=1` to enable it for Apache,
+CLI, Composer, and `docker exec php`. Configure it with the usual
+`XDEBUG_MODE` and `XDEBUG_CONFIG` variables. For example, use
+`XDEBUG_MODE=debug` and
+`XDEBUG_CONFIG='client_host=host.docker.internal client_port=9003'`.
+On Linux, you may also need
+`--add-host=host.docker.internal:host-gateway` so that address reaches your IDE.
+
+## HTTPS
+
+For a public site, we recommend handling certificates and redirects in a
+reverse proxy and forwarding HTTP to container port `8080`. Leave native
+TLS disabled in that setup. The image does not trust `X-Forwarded-*` headers;
+configure any proxy-aware application settings separately.
+
+To serve HTTPS directly, prepare a certificate, its matching private key,
+and a MySQL password file in a local `secrets` directory. All three files
+must be readable by `1000:1000`; don't make the private key world-readable.
+Stop any container using the database volume before starting this one:
 
 ```bash
-docker run --rm -p 80:8080 -p 443:8443 \
-  --mount type=bind,src="${PWD}/secrets/mysql-admin-password",dst=/run/secrets/mysql-admin-password,readonly \
-  --mount type=bind,src="${PWD}/secrets/tls.crt",dst=/run/secrets/tls.crt,readonly \
-  --mount type=bind,src="${PWD}/secrets/tls.key",dst=/run/secrets/tls.key,readonly \
+docker run --detach --name docker-lamp-tls --stop-timeout 75 \
+  -p 127.0.0.1:80:8080 -p 127.0.0.1:443:8443 \
+  --mount "type=bind,src=${PWD}/secrets,dst=/run/secrets,readonly" \
+  -e MYSQL_ADMIN_PASS_FILE=/run/secrets/mysql-admin-password \
   -e APACHE_TLS_ENABLED=1 \
   -e APACHE_TLS_CERT_FILE=/run/secrets/tls.crt \
   -e APACHE_TLS_KEY_FILE=/run/secrets/tls.key \
   -v "${PWD}/app:/app:ro" \
+  -v docker-lamp-mysql-2404:/var/lib/mysql \
   mattrayner/lamp:latest-2404-php8.5
 ```
 
-TLS files must be regular and readable by UID:GID `1000:1000`. This all-in-one image has a shared UID, so PHP can read a key readable by Apache; use external termination or separate services when key isolation is required. Native TLS redirects `8080` to HTTPS and deliberately does not trust `X-Forwarded-*` headers. Do not configure a proxy to terminate TLS at the image unless it has an explicit trusted-proxy boundary outside this image.
+Use a certificate valid for the hostname you browse to. With this mapping,
+HTTP on host port `80` redirects to HTTPS on host port `443`. Inside the
+container, TLS uses `8443`, and is only enabled when requested. For an
+existing volume, the password file must contain its existing admin password.
 
-Mount additive PHP `.ini` files at `/etc/docker-lamp/php/conf.d:ro`; PHP scans them in filename order after image configuration. Set `PHP_USER_OVERRIDES_DISABLED=1` to bypass only that directory for recovery. Xdebug is disabled by default for Apache, CLI, Composer, and `docker exec php`; opt in for all of them with `XDEBUG_ENABLED=1`. Use its standard `XDEBUG_MODE` and `XDEBUG_CONFIG` environment variables (for example, `XDEBUG_MODE=debug` and `XDEBUG_CONFIG='client_host=host.docker.internal client_port=9003'`) for connection settings.
+Apache, PHP, and MySQL share one user. PHP can therefore read MySQL data and
+any mounted secrets, including the TLS key. If you need to keep those apart,
+use separate web and database services and keep TLS keys at the proxy.
 
-`docker-lamp-backup --database NAME` writes a dump of exactly one existing database to stdout and diagnostics to stderr. `docker-lamp-restore --database NAME [--input FILE]` reads trusted SQL from stdin or a file and executes it as the MySQL `admin` user; it is not database-confined or transactional. A restore can therefore overwrite data beyond the named target and can leave partial changes when SQL fails. Use it only with trusted SQL and a tested backup. The command requires the named target to already exist, but never creates, drops, clears, or replays initialization imports itself. Supply `MYSQL_ADMIN_PASS` or `MYSQL_ADMIN_PASS_FILE` for either command. Logical dumps also have normal concurrent-DDL/non-transactional-table consistency limits; copying a live data directory is unsupported.
+## Kubernetes
 
-### Kubernetes and recovery
-
-For the Restricted-style Kubernetes manifest, PVC/CSI/NFS and Secret-projection limitations, storage paths, isolation boundaries, and the fixed-identity migration/recovery lifecycle, see the [Kubernetes, storage, and recovery guide](docs/kubernetes.md). The all-in-one image uses one shared UID for PHP and MySQL; use a separate deployment architecture when service or Secret isolation is required.
+The [Kubernetes guide](docs/kubernetes.md) explains the supplied deployment
+template, storage permissions, Secret mounts, and recovery. The template
+runs as `1000:1000` with a read-only root filesystem and no added
+capabilities. Check your storage driver's permission handling before using
+it; the image does not repair volume ownership.
 
 ## Development
 
-The final images consume release-specific, prebuilt PHP artifacts rather than
-installing PHP during their own builds. The artifact is a separate image for
-each Ubuntu release and must use a fixed tag; floating PHP artifact tags are
-not supported.
-
-Local testing requires Docker Buildx and a `DOCKER_DEFAULT_PLATFORM` matching
-the image architecture you want to test (for example, `linux/amd64` or
-`linux/arm64`). The test runner builds the three local artifact images from
-`php-builder/Dockerfile` before it builds the Compose services:
+You'll need Docker, Buildx, and Compose. From a checkout of this repository,
+choose your machine's architecture and run the tests:
 
 ```bash
-export DOCKER_DEFAULT_PLATFORM=linux/amd64
+export DOCKER_DEFAULT_PLATFORM=linux/amd64  # Use linux/arm64 on an ARM machine.
+export TEST_COMPOSE_PROJECT=docker-lamp-dev
 ./tests/test.sh
-docker compose -f docker-compose.test.yml -p ci down --volumes --remove-orphans
 ```
 
-The test Compose file builds and runs all three images concurrently with ephemeral loopback HTTP ports. Docker Compose v2 is preferred; the test runner falls back to `docker-compose` when it is the only available command.
+The test runner builds PHP first, then builds and tests each Ubuntu image.
+It binds HTTP to temporary local ports and starts MySQL with empty test
+data. Use a different `TEST_COMPOSE_PROJECT` for concurrent runs; when unset,
+the runner generates a unique name. Docker Compose v2 is preferred, with
+`docker-compose` supported as a fallback.
 
-```bash
-./tests/test.sh
-docker compose -f docker-compose.test.yml -p ci down --volumes --remove-orphans
-```
-
-`tests/test.sh` starts from a fresh `ci` test project, then runs the same behavioral suite against every Ubuntu variant. It uses bounded waits for Apache, Supervisor, and MySQL, prints redacted Compose logs on timeout or failure, and checks behavior and versions rather than a full HTML package snapshot. The suite also verifies the `/adminer/` login form and a credentialed local Adminer session without printing credentials.
-
-CI can test one already-pushed candidate without rebuilding it by setting
-`TEST_VARIANTS` to its Ubuntu variant, `TEST_IMAGE` to its immutable final
-image reference (for example `repository/lamp@sha256:...`), and
-`TEST_PHP_ARTIFACT_IMAGE` to its immutable PHP artifact reference. Set both
-`PREBUILT_FINAL_IMAGES=1` and `PREBUILT_PHP_ARTIFACTS=1`; this makes the test
-runner pull only the selected final service and use `--no-build`. These inputs
-are for candidate CI and do not change the default local workflow above.
-
-Run the slower rootless runtime/remediation suite explicitly when changing container startup, permissions, or process supervision:
+Run the full startup, permissions, shutdown, TLS, and database-lifecycle
+checks when changing the runtime:
 
 ```bash
 RUN_ROOTLESS_RUNTIME_TESTS=1 ./tests/test.sh
 ```
 
-## Building and releasing
-
-When releases are approved, build and test all variants before publishing their explicit tags. PHP artifact manifests are release-qualified and immutable: `8.5.12-ubuntu<version>-r1-<release-tag>`. Publish them first, then build each final image with its corresponding immutable `PHP_ARTIFACT_IMAGE` build argument:
+Add `TEST_VARIANTS=2404` to a test command to run just one Ubuntu variant.
+When you're finished, remove the test stacks and their disposable data:
 
 ```bash
-./tests/test.sh
+docker compose -f docker-compose.test.yml -p docker-lamp-dev down --volumes --remove-orphans
+docker compose -f docker-compose.test.yml -p docker-lamp-dev-rootless down --volumes --remove-orphans
+```
 
+CI can test published images without rebuilding them. Set
+`PREBUILT_FINAL_IMAGES=1`, `PREBUILT_PHP_ARTIFACTS=1`, and a single
+`TEST_VARIANTS` value, then supply `TEST_IMAGE` and `TEST_PHP_ARTIFACT_IMAGE`
+as immutable `repository@sha256:...` references.
+
+## Building and releasing
+
+Each Ubuntu image uses its own prebuilt PHP artifact. Don't mix artifacts
+from different Ubuntu releases or use a floating artifact tag.
+
+The [release workflow](.github/workflows/publish-release.yml) builds and tests
+native amd64 and arm64 candidates before publishing the release tags. For
+a manual build, publish the PHP artifact first, then pass its reference to
+the final image build. For example, for Ubuntu 22.04 (replace `v1.2.3` with
+your release tag):
+
+```bash
 RELEASE_TAG=v1.2.3
 docker buildx build --platform linux/amd64,linux/arm64 --target artifact \
   --build-arg UBUNTU_VERSION=22.04 --build-arg PHP_VERSION=8.5.12 \
@@ -233,7 +363,9 @@ docker build --build-arg PHP_ARTIFACT_IMAGE=mattrayner/lamp-php:8.5.12-ubuntu22.
   -f 2204/Dockerfile -t mattrayner/lamp:latest-2204-php8.5 .
 ```
 
-Do not create PHP 7 or generic Ubuntu release tags. Keep `latest` policy separate from these explicit PHP 8.5 release tags.
+Keep release-qualified PHP artifact tags unchanged once published. Test all
+variants before publishing final images, and use the explicit PHP 8.5 tags
+listed above.
 
 ## License
 
