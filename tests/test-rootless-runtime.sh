@@ -117,6 +117,10 @@ run_restricted_source_fixture() {
     mkdir -p "${fixture_root}/public"
     printf 'selected-root\n' > "${fixture_root}/public/index.html"
     printf 'not-public\n' > "${fixture_root}/private.txt"
+    # CI's checkout user is not the fixed runtime UID. Make this host-owned,
+    # read-only source fixture traversable before mounting it at /app.
+    chmod 0755 "${fixture_root}" "${fixture_root}/public"
+    chmod 0644 "${fixture_root}/public/index.html" "${fixture_root}/private.txt"
     docker run --rm --user 0:0 --entrypoint /bin/chown \
         --mount "type=bind,src=${state_root},dst=/state" \
         "$(runtime_test_image)" -R 1000:1000 /state >/dev/null
