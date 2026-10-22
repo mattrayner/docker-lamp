@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Keep every supported PHP entry point (including Composer's env-php shebang
+# and `docker exec php`) on the same additive configuration path.
+scan_dir=/opt/php/etc/conf.d:/run/lamp/php/conf.d
+if [[ "${PHP_USER_OVERRIDES_DISABLED:-0}" != 1 ]]; then
+    scan_dir+=:/etc/docker-lamp/php/conf.d
+fi
+if [[ "${XDEBUG_ENABLED:-0}" == 1 ]]; then
+    scan_dir+=:/etc/docker-lamp/php/xdebug-enabled
+fi
+
+export PHP_INI_SCAN_DIR="${scan_dir}"
+exec /opt/php/bin/php "$@"

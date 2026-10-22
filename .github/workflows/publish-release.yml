@@ -1,0 +1,774 @@
+name: Test and publish images
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to test (branch, tag, or SHA)
+        required: false
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    # Final releases use the candidate job below so this credential-free job
+    # covers PRs, pushes, manual runs, and prerelease validation only.
+    if: github.event_name != 'release' || github.event.release.prerelease
+    strategy:
+      fail-fast: false
+      # Each job owns a runner and Compose project. Keep only the two native
+      # runners active at once so the rootless MySQL fixtures cannot contend
+      # for a host's native-AIO allocation.
+      max-parallel: 2
+      matrix:
+        include:
+          - version: '2204'
+            runner: ubuntu-24.04
+            platform: linux/amd64
+            architecture: amd64
+          - version: '2204'
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            architecture: arm64
+          - version: '2404'
+            runner: ubuntu-24.04
+            platform: linux/amd64
+            architecture: amd64
+          - version: '2404'
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            architecture: arm64
+          - version: '2604'
+            runner: ubuntu-24.04
+            platform: linux/amd64
+            architecture: amd64
+          - version: '2604'
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            architecture: arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      TEST_COMPOSE_PROJECT: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.version }}-${{ matrix.architecture }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          # Release builds must test the exact tag being published.
+          ref: ${{ github.event.release.tag_name || inputs.ref || github.sha }}
+
+      - name: Run Ubuntu ${{ matrix.version }} ${{ matrix.platform }} integration and rootless suites
+        env:
+          DOCKER_DEFAULT_PLATFORM: ${{ matrix.platform }}
+          TEST_VARIANTS: ${{ matrix.version }}
+          RUN_ROOTLESS_RUNTIME_TESTS: '1'
+        run: bash tests/test.sh
+
+      - name: Collect Docker Compose logs
+        if: failure()
+        run: |
+           docker compose -f docker-compose.test.yml -p "${TEST_COMPOSE_PROJECT}" ps || true
+           docker compose -f docker-compose.test.yml -p "${TEST_COMPOSE_PROJECT}" logs --no-color || true
+
+  kubernetes-restricted:
+    # Run after the native matrix, but do not add a credentialed or publishing
+    # path for PRs, pushes, manual runs, or prereleases.
+    needs: integration
+    if: github.event_name != 'release' || github.event.release.prerelease
+    runs-on: ubuntu-24.04
+    env:
+      KIND_CLUSTER: docker-lamp-restricted-ci
+      KUBERNETES_NAMESPACE: docker-lamp-restricted-ci
+      KUBERNETES_IMAGE: docker-lamp-k8s:2404
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.ref || github.sha }}
+
+      - name: Build the native image used by the live Kubernetes check
+        run: |
+          set -Eeuo pipefail
+          docker build --platform linux/amd64 --file php-builder/Dockerfile --target artifact \
+            --build-arg UBUNTU_VERSION=24.04 --build-arg PHP_VERSION=8.5.12 \
+            --tag docker-lamp-k8s-php:2404 .
+          docker build --platform linux/amd64 --file 2404/Dockerfile \
+            --build-arg PHP_ARTIFACT_IMAGE=docker-lamp-k8s-php:2404 \
+            --tag "${KUBERNETES_IMAGE}" .
+
+      - name: Create a Restricted-admission kind cluster
+        uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: docker-lamp-restricted-ci
+
+      - name: Apply and validate the Restricted deployment live
+        run: |
+          set -Eeuo pipefail
+          kubectl create namespace "${KUBERNETES_NAMESPACE}"
+          kubectl label namespace "${KUBERNETES_NAMESPACE}" \
+            pod-security.kubernetes.io/enforce=restricted \
+            pod-security.kubernetes.io/enforce-version=latest
+          kind load docker-image --name "${KIND_CLUSTER}" "${KUBERNETES_IMAGE}"
+
+          kubectl create secret generic mysql-admin-password \
+            --namespace "${KUBERNETES_NAMESPACE}" \
+            --from-literal=password=restricted-ci-password \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply --namespace "${KUBERNETES_NAMESPACE}" -f - <<'YAML'
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: lamp-mysql-data
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 1Gi
+          YAML
+          # The production template deliberately requires operators to create
+          # this subPath out of band. Provision it with the same non-root,
+          # Restricted-compatible identity before applying that template.
+          kubectl apply --namespace "${KUBERNETES_NAMESPACE}" -f - <<'YAML'
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: prepare-mysql-subpath
+          spec:
+            template:
+              spec:
+                restartPolicy: Never
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 1000
+                  runAsGroup: 1000
+                  fsGroup: 1000
+                  seccompProfile:
+                    type: RuntimeDefault
+                containers:
+                  - name: prepare
+                    image: busybox:1.36
+                    command: ["/bin/sh", "-ec", "mkdir -p /data/mysql && test -w /data/mysql"]
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop: ["ALL"]
+                    volumeMounts:
+                      - name: mysql-data
+                        mountPath: /data
+                volumes:
+                  - name: mysql-data
+                    persistentVolumeClaim:
+                      claimName: lamp-mysql-data
+          YAML
+          kubectl wait --namespace "${KUBERNETES_NAMESPACE}" --for=condition=complete job/prepare-mysql-subpath --timeout=120s
+
+          kustomize_dir=$(mktemp -d)
+          cp kubernetes/restricted-deployment.yaml "${kustomize_dir}/restricted-deployment.yaml"
+          printf '%s\n' \
+            'resources:' \
+            '- restricted-deployment.yaml' \
+            'images:' \
+            '- name: mattrayner/lamp' \
+            '  newName: docker-lamp-k8s' \
+            '  newTag: "2404"' > "${kustomize_dir}/kustomization.yaml"
+          kubectl kustomize "${kustomize_dir}" | kubectl apply --namespace "${KUBERNETES_NAMESPACE}" -f -
+          kubectl rollout status --namespace "${KUBERNETES_NAMESPACE}" deployment/docker-lamp --timeout=240s
+
+          # Rollout only proves that Kubernetes considers the container ready.
+          # Wait for both application services, authenticating MySQL with the
+          # projected Secret, before inspecting the live security contract.
+          deadline=$((SECONDS + 120))
+          ready=0
+          attempt=0
+          while (( SECONDS < deadline )); do
+            ((attempt += 1))
+            remaining=$((deadline - SECONDS))
+            (( remaining > 0 )) || break
+            attempt_timeout=$(( remaining < 10 ? remaining : 10 ))
+            # Bound both kubectl exec calls with the runner's GNU timeout. The
+            # curl command also has its own connection and total-time limits.
+            if timeout --foreground --signal=KILL "${attempt_timeout}s" \
+                kubectl exec --namespace "${KUBERNETES_NAMESPACE}" deployment/docker-lamp -- \
+                curl --fail --silent --connect-timeout 3 --max-time "${attempt_timeout}" \
+                http://127.0.0.1:8080/ >/dev/null 2>&1; then
+              remaining=$((deadline - SECONDS))
+              (( remaining > 0 )) || break
+              attempt_timeout=$(( remaining < 10 ? remaining : 10 ))
+              if timeout --foreground --signal=KILL "${attempt_timeout}s" \
+                  kubectl exec --namespace "${KUBERNETES_NAMESPACE}" deployment/docker-lamp -- sh -ec '
+                    MYSQL_PWD="$(cat /run/secrets/mysql-admin/password)" mysql \
+                      --protocol=socket --socket=/run/mysql/mysqld.sock -uadmin \
+                      --connect-timeout=5 --execute "SELECT 1" >/dev/null
+                  ' >/dev/null 2>&1; then
+                ready=1
+                echo "HTTP and authenticated MySQL readiness checks passed on attempt ${attempt}."
+                break
+              fi
+            fi
+            remaining=$((deadline - SECONDS))
+            (( remaining > 0 )) || break
+            sleep "$(( remaining < 2 ? remaining : 2 ))"
+          done
+          (( ready == 1 )) || {
+            echo "Timed out after 120 seconds waiting for HTTP and authenticated MySQL readiness." >&2
+            exit 1
+          }
+
+          POD_JSON="$(kubectl get pods --namespace "${KUBERNETES_NAMESPACE}" -l app.kubernetes.io/name=docker-lamp -o json)" python3 - <<'PY'
+          import json
+          import os
+
+          pods = json.loads(os.environ["POD_JSON"])["items"]
+          assert len(pods) == 1, f"expected one docker-lamp Pod, found {len(pods)}"
+          pod = pods[0]
+          assert pod["status"]["phase"] == "Running", pod["status"]["phase"]
+          security = pod["spec"]["securityContext"]
+          assert security["runAsNonRoot"] is True
+          assert security["runAsUser"] == 1000
+          assert security["runAsGroup"] == 1000
+          assert security["fsGroup"] == 1000
+          assert security["seccompProfile"]["type"] == "RuntimeDefault"
+          container = next(item for item in pod["spec"]["containers"] if item["name"] == "lamp")
+          container_security = container["securityContext"]
+          assert container_security["allowPrivilegeEscalation"] is False
+          assert container_security["readOnlyRootFilesystem"] is True
+          assert container_security["capabilities"]["drop"] == ["ALL"]
+          print("Live Pod satisfies the Restricted security contract.")
+          PY
+          kubectl exec --namespace "${KUBERNETES_NAMESPACE}" deployment/docker-lamp -- sh -ec '
+            test "$(id -u)" = 1000
+            test "$(id -g)" = 1000
+            test ! -w /
+            test -w /run/lamp
+            test -w /run/mysql
+            test -w /tmp
+            test -w /var/lib/mysql
+            test -r /run/secrets/mysql-admin/password
+            test "$(awk "/CapEff/ {print \$2}" /proc/1/status)" = 0000000000000000
+            curl --fail --silent http://127.0.0.1:8080/ >/dev/null
+          '
+
+      - name: Collect Kubernetes diagnostics
+        if: failure()
+        run: |
+          kubectl get all --namespace "${KUBERNETES_NAMESPACE}" || true
+          kubectl describe deployment/docker-lamp --namespace "${KUBERNETES_NAMESPACE}" || true
+          kubectl logs --namespace "${KUBERNETES_NAMESPACE}" -l app.kubernetes.io/name=docker-lamp --all-containers=true --prefix || true
+
+      - name: Delete kind cluster
+        if: always()
+        run: kind delete cluster --name "${KIND_CLUSTER}" || true
+
+  candidate:
+    # Only a published, non-prerelease release receives Docker Hub credentials.
+    # Each entry builds and tests one architecture-native candidate pair.
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    strategy:
+      fail-fast: false
+      # Keep native candidate test environments isolated for the rootless
+      # runtime suite's native-AIO fixture as well.
+      max-parallel: 2
+      matrix:
+        include:
+          - version: '2204'
+            ubuntu_version: '22.04'
+            runner: ubuntu-24.04
+            platform: linux/amd64
+            architecture: amd64
+          - version: '2204'
+            ubuntu_version: '22.04'
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            architecture: arm64
+          - version: '2404'
+            ubuntu_version: '24.04'
+            runner: ubuntu-24.04
+            platform: linux/amd64
+            architecture: amd64
+          - version: '2404'
+            ubuntu_version: '24.04'
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            architecture: arm64
+          - version: '2604'
+            ubuntu_version: '26.04'
+            runner: ubuntu-24.04
+            platform: linux/amd64
+            architecture: amd64
+          - version: '2604'
+            ubuntu_version: '26.04'
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            architecture: arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      IMAGE_NAME: ${{ vars.DOCKERHUB_USERNAME }}/lamp
+      PHP_ARTIFACT_IMAGE_NAME: ${{ vars.DOCKERHUB_USERNAME }}/lamp-php
+      TEST_COMPOSE_PROJECT: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.version }}-${{ matrix.architecture }}
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Define immutable candidate references
+        id: references
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          release_slug=$(printf '%s' "${RELEASE_TAG}" | tr -c 'A-Za-z0-9_.-' '-' | cut -c1-48)
+          candidate_id="${release_slug}-run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.version }}-${{ matrix.architecture }}"
+          php_tag="php-8.5.12-ubuntu${{ matrix.ubuntu_version }}-candidate-${candidate_id}"
+          final_tag="candidate-${candidate_id}"
+          printf 'PHP_CANDIDATE_REF=%s\n' "${PHP_ARTIFACT_IMAGE_NAME}:${php_tag}" >> "${GITHUB_ENV}"
+          printf 'FINAL_CANDIDATE_REF=%s\n' "${IMAGE_NAME}:${final_tag}" >> "${GITHUB_ENV}"
+          printf 'php_reference=%s\n' "${PHP_ARTIFACT_IMAGE_NAME}:${php_tag}" >> "${GITHUB_OUTPUT}"
+          printf 'final_reference=%s\n' "${IMAGE_NAME}:${final_tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build and publish native Ubuntu ${{ matrix.ubuntu_version }} PHP candidate
+        id: build_php
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: php-builder/Dockerfile
+          target: artifact
+          platforms: ${{ matrix.platform }}
+          push: true
+          build-args: |
+            UBUNTU_VERSION=${{ matrix.ubuntu_version }}
+            PHP_VERSION=8.5.12
+          tags: ${{ env.PHP_CANDIDATE_REF }}
+          sbom: true
+          provenance: mode=max
+
+      - name: Build and publish native Ubuntu ${{ matrix.version }} final candidate
+        id: build_final
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.version }}/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: true
+          build-args: PHP_ARTIFACT_IMAGE=${{ env.PHP_CANDIDATE_REF }}@${{ steps.build_php.outputs.digest }}
+          tags: ${{ env.FINAL_CANDIDATE_REF }}
+          sbom: true
+          provenance: mode=max
+
+      - name: Test the exact final candidate digest
+        env:
+          DOCKER_DEFAULT_PLATFORM: ${{ matrix.platform }}
+          TEST_VARIANTS: ${{ matrix.version }}
+          PREBUILT_PHP_ARTIFACTS: '1'
+          PREBUILT_FINAL_IMAGES: '1'
+          TEST_PHP_ARTIFACT_IMAGE: ${{ env.PHP_CANDIDATE_REF }}@${{ steps.build_php.outputs.digest }}
+          TEST_IMAGE: ${{ env.FINAL_CANDIDATE_REF }}@${{ steps.build_final.outputs.digest }}
+          RUN_ROOTLESS_RUNTIME_TESTS: '1'
+        run: bash tests/test.sh
+
+      - name: Export candidate metadata for digest promotion
+        env:
+          PHP_DIGEST: ${{ steps.build_php.outputs.digest }}
+          FINAL_DIGEST: ${{ steps.build_final.outputs.digest }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          PLATFORM: ${{ matrix.platform }}
+          ARCHITECTURE: ${{ matrix.architecture }}
+          VARIANT: ${{ matrix.version }}
+        run: |
+          python3 - <<'PY' > candidate-metadata.json
+          import json
+          import os
+
+          print(json.dumps({
+              "release_tag": os.environ["RELEASE_TAG"],
+              "run_id": os.environ["RUN_ID"],
+              "run_attempt": os.environ["RUN_ATTEMPT"],
+              "variant": os.environ["VARIANT"],
+              "platform": os.environ["PLATFORM"],
+              "architecture": os.environ["ARCHITECTURE"],
+              "php_artifact": {
+                  "reference": os.environ["PHP_CANDIDATE_REF"],
+                  "digest": os.environ["PHP_DIGEST"],
+                  "immutable_reference": f'{os.environ["PHP_CANDIDATE_REF"]}@{os.environ["PHP_DIGEST"]}',
+              },
+              "image": {
+                  "reference": os.environ["FINAL_CANDIDATE_REF"],
+                  "digest": os.environ["FINAL_DIGEST"],
+                  "immutable_reference": f'{os.environ["FINAL_CANDIDATE_REF"]}@{os.environ["FINAL_DIGEST"]}',
+              },
+          }, sort_keys=True))
+          PY
+
+      - name: Upload candidate metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-metadata-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.version }}-${{ matrix.architecture }}
+          path: candidate-metadata.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Collect Docker Compose logs
+        if: failure()
+        run: |
+          docker compose -f docker-compose.test.yml -p "${TEST_COMPOSE_PROJECT}" ps || true
+          docker compose -f docker-compose.test.yml -p "${TEST_COMPOSE_PROJECT}" logs --no-color || true
+
+  promote:
+    # Matrix success means all six native candidate builds were tested before
+    # promotion starts. PR, push, manual, and prerelease events cannot publish.
+    needs: candidate
+    if: github.event_name == 'release' && !github.event.release.prerelease && needs.candidate.result == 'success'
+    runs-on: ubuntu-24.04
+    concurrency:
+      # Serialize all Docker Hub promotions so an older release cannot race a
+      # newer eligible release while updating convenience aliases.
+      group: dockerhub-promotion
+      cancel-in-progress: false
+    env:
+      IMAGE_NAME: ${{ vars.DOCKERHUB_USERNAME }}/lamp
+      PHP_ARTIFACT_IMAGE_NAME: ${{ vars.DOCKERHUB_USERNAME }}/lamp-php
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      RELEASE_ID: ${{ github.event.release.id }}
+      RUN_ID: ${{ github.run_id }}
+      RUN_ATTEMPT: ${{ github.run_attempt }}
+
+    steps:
+      # Keep artifact directories separate: every matrix artifact contains a
+      # candidate-metadata.json file with the same basename.
+      - name: Download candidate metadata
+        uses: actions/download-artifact@v4
+        with:
+          pattern: candidate-metadata-${{ github.run_id }}-${{ github.run_attempt }}-*
+          path: promotion-metadata
+          merge-multiple: false
+
+      - name: Verify candidate metadata and prepare immutable inputs
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path("promotion-metadata")
+          variants = {"2204": "22.04", "2404": "24.04", "2604": "26.04"}
+          platforms = {"amd64": "linux/amd64", "arm64": "linux/arm64"}
+          release_tag = os.environ["RELEASE_TAG"]
+          run_id = os.environ["RUN_ID"]
+          run_attempt = os.environ["RUN_ATTEMPT"]
+          image_name = os.environ["IMAGE_NAME"]
+          php_image_name = os.environ["PHP_ARTIFACT_IMAGE_NAME"]
+          release_slug = re.sub(r"[^A-Za-z0-9_.-]", "-", release_tag)[:48]
+          digest_pattern = re.compile(r"sha256:[0-9a-f]{64}$")
+
+          expected_names = {
+              f"candidate-metadata-{run_id}-{run_attempt}-{variant}-{architecture}"
+              for variant in variants
+              for architecture in platforms
+          }
+          files = sorted(root.rglob("candidate-metadata.json"))
+          if len(files) != len(expected_names):
+              raise SystemExit(f"expected {len(expected_names)} metadata files, found {len(files)}")
+          if {path.parent.name for path in files} != expected_names:
+              raise SystemExit("candidate metadata artifact directories are incomplete or unexpected")
+
+          records = {}
+          expected_top_level = {
+              "release_tag", "run_id", "run_attempt", "variant", "platform",
+              "architecture", "php_artifact", "image",
+          }
+          expected_image_fields = {"reference", "digest", "immutable_reference"}
+          for path in files:
+              with path.open(encoding="utf-8") as metadata_file:
+                  record = json.load(metadata_file)
+              if set(record) != expected_top_level:
+                  raise SystemExit(f"{path}: unexpected metadata schema")
+              if record["release_tag"] != release_tag or record["run_id"] != run_id \
+                      or record["run_attempt"] != run_attempt:
+                  raise SystemExit(f"{path}: release or workflow identity does not match")
+
+              variant = record["variant"]
+              architecture = record["architecture"]
+              if variant not in variants or architecture not in platforms \
+                      or record["platform"] != platforms[architecture]:
+                  raise SystemExit(f"{path}: unexpected variant or platform")
+              key = (variant, architecture)
+              if key in records:
+                  raise SystemExit(f"duplicate metadata for {variant}/{architecture}")
+
+              candidate_id = f"{release_slug}-run-{run_id}-{run_attempt}-{variant}-{architecture}"
+              expected_php_reference = (
+                  f"{php_image_name}:php-8.5.12-ubuntu{variants[variant]}-candidate-{candidate_id}"
+              )
+              expected_image_reference = f"{image_name}:candidate-{candidate_id}"
+              for image_key, expected_reference in (
+                  ("php_artifact", expected_php_reference),
+                  ("image", expected_image_reference),
+              ):
+                  image = record[image_key]
+                  if set(image) != expected_image_fields or image["reference"] != expected_reference \
+                          or not isinstance(image["digest"], str) \
+                          or not digest_pattern.fullmatch(image["digest"]) \
+                          or image["immutable_reference"] != f"{expected_reference}@{image['digest']}":
+                      raise SystemExit(f"{path}: invalid {image_key} candidate digest reference")
+              records[key] = record
+
+          expected_keys = {(variant, architecture) for variant in variants for architecture in platforms}
+          if set(records) != expected_keys:
+              raise SystemExit("candidate metadata coverage is incomplete or unexpected")
+
+          output = Path("promotion-inputs")
+          output.mkdir()
+          for variant in variants:
+              for image_key, prefix in (("php_artifact", "php"), ("image", "lamp")):
+                  references = [
+                      records[(variant, architecture)][image_key]["immutable_reference"]
+                      for architecture in ("amd64", "arm64")
+                  ]
+                  (output / f"{prefix}-{variant}.refs").write_text(
+                      "\n".join(references) + "\n", encoding="utf-8"
+                  )
+          PY
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create immutable release manifests and eligible aliases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          declare -a immutable_targets=()
+          declare -A intended_digests=()
+          declare -A planning_references=()
+          declare -A destination_states=()
+
+          calculate_intended_manifest_digest() {
+              local planning_reference=$1
+              local refs_file=$2
+              local -a refs
+              local planned_digest
+
+              mapfile -t refs < "${refs_file}"
+              [[ ${#refs[@]} -eq 2 ]] || {
+                  echo "expected two immutable candidate references in ${refs_file}" >&2
+                  return 1
+              }
+              # Buildx cannot calculate a reliable digest in dry-run mode. Push
+              # a unique plan tag, then use Docker Hub's assigned digest as the
+              # only intended manifest identity for the public destination.
+              # Do not delete plan references by manifest digest: the promoted
+              # destination deliberately reuses that digest, and registry
+              # deletion could remove the public manifest as well.
+              if ! docker buildx imagetools create --tag "${planning_reference}" "${refs[@]}"; then
+                  echo "failed to publish temporary manifest plan ${planning_reference}" >&2
+                  return 1
+              fi
+              if ! planned_digest=$(destination_digest "${planning_reference}"); then
+                  echo "failed to inspect temporary manifest plan ${planning_reference}" >&2
+                  return 1
+              fi
+              if [[ "${planned_digest}" == absent ]]; then
+                  echo "temporary manifest plan ${planning_reference} was not found after publishing" >&2
+                  return 1
+              fi
+              printf '%s\n' "${planned_digest}"
+          }
+
+          destination_digest() {
+              local target=$1
+
+              # Docker Hub's registry API distinguishes an absent tag (404)
+              # from authentication, transport, and other lookup failures.
+              # Do not treat an arbitrary imagetools error as an absent tag.
+              TARGET="${target}" python3 - <<'PY'
+          import base64
+          import json
+          import os
+          import re
+          import sys
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          target = os.environ["TARGET"]
+          if ":" not in target:
+              raise SystemExit(f"invalid Docker Hub tag reference: {target}")
+          repository, tag = target.rsplit(":", 1)
+          if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*", repository):
+              raise SystemExit(f"invalid Docker Hub repository reference: {repository}")
+
+          config_path = Path.home() / ".docker" / "config.json"
+          try:
+              config = json.loads(config_path.read_text(encoding="utf-8"))
+              auth = next(
+                  value["auth"]
+                  for key, value in config.get("auths", {}).items()
+                  if "docker.io" in key and "auth" in value
+              )
+          except (OSError, KeyError, StopIteration, json.JSONDecodeError) as error:
+              raise SystemExit(f"unable to read Docker Hub credentials for manifest lookup: {error}")
+
+          basic_auth = "Basic " + auth
+          token_url = "https://auth.docker.io/token?" + urllib.parse.urlencode({
+              "service": "registry.docker.io",
+              "scope": f"repository:{repository}:pull",
+          })
+          try:
+              with urllib.request.urlopen(urllib.request.Request(
+                  token_url, headers={"Authorization": basic_auth}
+              )) as response:
+                  token = json.load(response)["token"]
+          except (OSError, KeyError, json.JSONDecodeError) as error:
+              raise SystemExit(f"unable to obtain Docker Hub manifest lookup token: {error}")
+
+          accept = ", ".join((
+              "application/vnd.oci.image.index.v1+json",
+              "application/vnd.docker.distribution.manifest.list.v2+json",
+              "application/vnd.oci.image.manifest.v1+json",
+              "application/vnd.docker.distribution.manifest.v2+json",
+          ))
+          manifest_url = f"https://registry-1.docker.io/v2/{repository}/manifests/{tag}"
+          request = urllib.request.Request(manifest_url, headers={
+              "Authorization": f"Bearer {token}",
+              "Accept": accept,
+          }, method="GET")
+          try:
+              with urllib.request.urlopen(request) as response:
+                  digest = response.headers.get("Docker-Content-Digest")
+          except urllib.error.HTTPError as error:
+              if error.code == 404:
+                  print("absent")
+                  raise SystemExit(0)
+              raise SystemExit(f"Docker Hub manifest lookup failed for {target}: HTTP {error.code}")
+          except OSError as error:
+              raise SystemExit(f"Docker Hub manifest lookup failed for {target}: {error}")
+
+          if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+              raise SystemExit(f"Docker Hub returned no valid manifest digest for {target}")
+          print(digest)
+          PY
+          }
+
+          plan_immutable_manifest() {
+              local target=$1
+              local refs_file=$2
+              local planning_reference=$3
+              local intended actual
+
+              if ! intended=$(calculate_intended_manifest_digest "${planning_reference}" "${refs_file}"); then
+                  return 1
+              fi
+              if ! actual=$(destination_digest "${target}"); then
+                  return 1
+              fi
+              if [[ "${actual}" != absent && "${actual}" != "${intended}" ]]; then
+                  echo "immutable destination ${target} differs from the tested candidate manifest" >&2
+                  return 1
+              fi
+              immutable_targets+=("${target}")
+              intended_digests["${target}"]=${intended}
+              planning_references["${target}"]=${planning_reference}
+              destination_states["${target}"]=${actual}
+          }
+
+          create_immutable_manifest() {
+              local target=$1
+              local planning_reference=${planning_references[${target}]}
+              local intended_digest=${intended_digests[${target}]}
+
+              docker buildx imagetools create --prefer-index=false --tag "${target}" \
+                  "${planning_reference}@${intended_digest}"
+          }
+
+          publish_alias() {
+              local alias=$1
+              local immutable_target=$2
+              local immutable_digest=${intended_digests[${immutable_target}]}
+
+              docker buildx imagetools create --prefer-index=false --tag "${alias}" \
+                  "${immutable_target}@${immutable_digest}"
+          }
+
+          for variant in 2204 2404 2604; do
+              case "${variant}" in
+                  2204) ubuntu_version=22.04 ;;
+                  2404) ubuntu_version=24.04 ;;
+                  2604) ubuntu_version=26.04 ;;
+              esac
+              plan_immutable_manifest \
+                  "${PHP_ARTIFACT_IMAGE_NAME}:8.5.12-ubuntu${ubuntu_version}-r1-${RELEASE_TAG}" \
+                  "promotion-inputs/php-${variant}.refs" \
+                  "${PHP_ARTIFACT_IMAGE_NAME}:promotion-plan-${RUN_ID}-${RUN_ATTEMPT}-php-${variant}"
+          done
+
+          for variant in 2204 2404 2604; do
+              plan_immutable_manifest \
+                  "${IMAGE_NAME}:${RELEASE_TAG}-${variant}-php8.5" \
+                  "promotion-inputs/lamp-${variant}.refs" \
+                  "${IMAGE_NAME}:promotion-plan-${RUN_ID}-${RUN_ATTEMPT}-lamp-${variant}"
+          done
+
+          # All immutable destinations are inspected before any write. A replay
+          # may no-op only when the registry already has the exact digest.
+          for target in "${immutable_targets[@]}"; do
+              if [[ "${destination_states[${target}]}" == absent ]]; then
+                  create_immutable_manifest "${target}"
+              fi
+          done
+          for target in "${immutable_targets[@]}"; do
+              [[ "$(destination_digest "${target}")" == "${intended_digests[${target}]}" ]] || {
+                  echo "immutable destination ${target} was not published with the intended digest" >&2
+                  exit 1
+              }
+          done
+
+          # Check GitHub immediately before aliases so queued or replayed older
+          # releases cannot advance them after a newer release is current.
+          if ! latest_release_id=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq '.id'); then
+              echo "failed to fetch GitHub's current latest release before alias publication" >&2
+              exit 1
+          fi
+          if [[ ! "${latest_release_id}" =~ ^[0-9]+$ || ! "${RELEASE_ID}" =~ ^[0-9]+$ ]]; then
+              echo "failed to parse GitHub release ID before alias publication" >&2
+              exit 1
+          fi
+          if [[ "${latest_release_id}" != "${RELEASE_ID}" ]]; then
+              echo "This release is not GitHub's current latest release; skipping convenience aliases."
+              exit 0
+          fi
+          for variant in 2204 2404 2604; do
+              immutable_target="${IMAGE_NAME}:${RELEASE_TAG}-${variant}-php8.5"
+              publish_alias "${IMAGE_NAME}:latest-${variant}-php8.5" "${immutable_target}"
+          done
+          publish_alias "${IMAGE_NAME}:latest" "${IMAGE_NAME}:${RELEASE_TAG}-2604-php8.5"

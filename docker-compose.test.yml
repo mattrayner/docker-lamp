@@ -1,31 +1,59 @@
-version: "2"
-
 services:
-
-  web2004-php7:
+  web2204:
+    image: ${TEST_IMAGE:-docker-lamp-test:2204}
     build:
       context: .
-      dockerfile: ./2004/Dockerfile
+      dockerfile: ./2204/Dockerfile
       args:
-        - PHP_VERSION=7.4
+        PHP_ARTIFACT_IMAGE: ${TEST_PHP_ARTIFACT_IMAGE:-docker-lamp-php-artifact:2204}
     environment:
-      - MYSQL_ADMIN_PASS=password
+      MYSQL_ADMIN_PASS: test-admin-password-2204
+      # Native AIO uses a host-global allocation limit; disable it only in the
+      # concurrent test stack so unrelated test projects cannot exhaust it.
+      MYSQL_USE_NATIVE_AIO: "0"
+    user: "1000:1000"
     ports:
-      - "3030:80"
-      - "3031:3306"
+      - "127.0.0.1::8080"
     tmpfs:
-      - /var/lib/mysql
+      - /var/lib/mysql:uid=1000,gid=1000,mode=0750
+    volumes:
+      - ./tests/fixtures:/test-fixtures:ro
+      - ./tests/fixtures/apache-test-fixtures.conf:/etc/apache2/conf-enabled/test-fixtures.conf:ro
 
-  web2004-php8:
+  web2404:
+    image: ${TEST_IMAGE:-docker-lamp-test:2404}
     build:
       context: .
-      dockerfile: ./2004/Dockerfile
+      dockerfile: ./2404/Dockerfile
       args:
-        - PHP_VERSION=8.0
+        PHP_ARTIFACT_IMAGE: ${TEST_PHP_ARTIFACT_IMAGE:-docker-lamp-php-artifact:2404}
     environment:
-      - MYSQL_ADMIN_PASS=password
+      MYSQL_ADMIN_PASS: test-admin-password-2404
+      MYSQL_USE_NATIVE_AIO: "0"
+    user: "1000:1000"
     ports:
-      - "3040:80"
-      - "3041:3306"
+      - "127.0.0.1::8080"
     tmpfs:
-      - /var/lib/mysql
+      - /var/lib/mysql:uid=1000,gid=1000,mode=0750
+    volumes:
+      - ./tests/fixtures:/test-fixtures:ro
+      - ./tests/fixtures/apache-test-fixtures.conf:/etc/apache2/conf-enabled/test-fixtures.conf:ro
+
+  web2604:
+    image: ${TEST_IMAGE:-docker-lamp-test:2604}
+    build:
+      context: .
+      dockerfile: ./2604/Dockerfile
+      args:
+        PHP_ARTIFACT_IMAGE: ${TEST_PHP_ARTIFACT_IMAGE:-docker-lamp-php-artifact:2604}
+    environment:
+      MYSQL_ADMIN_PASS: test-admin-password-2604
+      MYSQL_USE_NATIVE_AIO: "0"
+    user: "1000:1000"
+    ports:
+      - "127.0.0.1::8080"
+    tmpfs:
+      - /var/lib/mysql:uid=1000,gid=1000,mode=0750
+    volumes:
+      - ./tests/fixtures:/test-fixtures:ro
+      - ./tests/fixtures/apache-test-fixtures.conf:/etc/apache2/conf-enabled/test-fixtures.conf:ro
