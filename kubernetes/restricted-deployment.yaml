@@ -1,0 +1,103 @@
+# Template for one all-in-one Docker-LAMP Pod. Replace the image digest and
+# provision the lamp-mysql-data claim and mysql-admin-password Secret first.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docker-lamp
+  labels:
+    app.kubernetes.io/name: docker-lamp
+spec:
+  # This image contains both Apache/PHP and MySQL. Do not scale this Deployment
+  # or share its data PVC between replicas. Recreate prevents Deployment-managed
+  # old/new Pod overlap; see docs/kubernetes.md for downtime and fencing limits.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: docker-lamp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: docker-lamp
+    spec:
+      # The runtime needs up to 60 seconds to stop Supervisor and its children.
+      # Leave time for that cleanup before kubelet sends SIGKILL.
+      terminationGracePeriodSeconds: 75
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: lamp
+          # Pin this to an approved immutable image digest before deployment.
+          image: mattrayner/lamp:latest-2404-php8.5
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: MYSQL_ADMIN_PASS_FILE
+              value: /run/secrets/mysql-admin/password
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          volumeMounts:
+            # The image has a read-only root filesystem. These are the only
+            # runtime directories it needs to write outside the data claim.
+            - name: lamp-runtime
+              mountPath: /run/lamp
+            - name: mysql-runtime
+              mountPath: /run/mysql
+            - name: temporary-files
+              mountPath: /tmp
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+              # The storage operator must pre-create this empty writable
+              # directory. It keeps filesystem lost+found out of MySQL's view.
+              subPath: mysql
+            - name: mysql-admin-secret
+              mountPath: /run/secrets/mysql-admin
+              readOnly: true
+      volumes:
+        - name: lamp-runtime
+          emptyDir: {}
+        - name: mysql-runtime
+          emptyDir: {}
+        - name: temporary-files
+          emptyDir: {}
+        - name: mysql-data
+          persistentVolumeClaim:
+            claimName: lamp-mysql-data
+        - name: mysql-admin-secret
+          secret:
+            secretName: mysql-admin-password
+            # Group-readable after fsGroup handling on a compatible kubelet.
+            # See docs/kubernetes.md before using a stricter mode.
+            defaultMode: 0440
+            items:
+              - key: password
+                path: password
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: docker-lamp
+  labels:
+    app.kubernetes.io/name: docker-lamp
+spec:
+  selector:
+    app.kubernetes.io/name: docker-lamp
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
