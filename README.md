@@ -1,17 +1,21 @@
 # Docker-LAMP
 
-Docker-LAMP runs Apache, MySQL, and PHP together in one container. Mount your
-application at `/app`, give MySQL a volume, and you're ready to work.
+Docker-LAMP runs Apache, MySQL, and PHP together in one container. You keep
+your application files on your computer and share that folder with the
+container at `/app`. Docker manages a separate storage area for your database.
 
 The images use PHP 8.5.12 and MySQL 9.7 LTS, with a choice of Ubuntu
-22.04, 24.04, or 26.04. Each image supports amd64 and arm64 and includes
-Composer and Adminer.
+22.04, 24.04, or 26.04. Each image supports Intel/AMD processors (`amd64`)
+and ARM processors (`arm64`, including Apple silicon). It includes
+[Composer](https://getcomposer.org/) for PHP dependencies and
+[Adminer](https://www.adminer.org/) for managing databases in your browser.
 
 ## Contents
 
 - [Image versions](#image-versions)
 - [Using the image](#using-the-image)
   - [Running without root](#running-without-root)
+  - [macOS and Windows](#macos-and-windows)
 - [Application examples](examples/README.md)
 - [MySQL databases](#mysql-databases)
 - [PHP configuration](#php-configuration)
@@ -41,39 +45,78 @@ Adminer 6.1.2 is included for database administration at `/adminer/`.
 
 The examples use Ubuntu 24.04. You can substitute either of the other tags
 without changing the commands. Run them from your project directory, with
-Docker installed and running.
+Docker installed and running. If you haven't installed Docker yet, follow
+the [Docker installation guide](https://docs.docker.com/get-started/get-docker/)
+and the platform notes below. Installing Docker or WSL may require
+administrator permission; that is separate from running this image.
 
 ### Running without root
 
-Apache, PHP, MySQL, and Supervisor run as user and group `1000:1000`,
-including during startup. There is no root setup step inside the container.
-You don't need `sudo`, `--privileged`, or a `--user` override to run the image.
-Changing the runtime user is not supported.
+The container uses an ordinary Linux account, not the administrator account
+(called **root**). Apache, PHP, MySQL, and Supervisor all use that account,
+including during startup. Its user ID (UID) and group ID (GID) are both
+`1000`, written as `1000:1000` in Docker commands.
 
-The quick start uses a fresh Docker-managed MySQL volume and a read-only
-mount for your application. Docker gives the empty volume the permissions
-provided by the image, so you don't need to run `chown`. Your host account
-doesn't need to be UID 1000; your application files just need to be readable
-by the container user. Writable host mounts, such as upload directories or
-an existing database directory, need suitable permissions before startup.
+You don't need `sudo` inside the container or the `--privileged` option.
+Don't change the account with `--user`; the image expects `1000:1000`.
+
+The quick start keeps MySQL in a [Docker volume](https://docs.docker.com/engine/storage/volumes/):
+a storage area managed by Docker, separate from your application folder.
+A fresh volume gets the permissions it needs automatically, so you don't
+need to change its owner with `chown`. Your account on your own computer
+doesn't need to be UID 1000; the container just needs permission to read your
+application files. Shared folders for uploads or other writable data also
+need permission to write.
 See [adding your own content](#adding-your-own-content).
 
 Docker access on your machine is separate. These commands assume you can
-already run `docker info` without sudo, using Docker Desktop, a
-[rootless Docker daemon](https://docs.docker.com/engine/security/rootless/),
-or another configured Docker installation. On Linux, joining the `docker`
-group also allows sudo-free commands, but grants effectively root-level
-access to the host; it is not the same as running Docker rootless.
+already run `docker info` without sudo. Docker Desktop handles this as part
+of its setup. On Linux, see [Docker's rootless mode](https://docs.docker.com/engine/security/rootless/)
+to run Docker itself without root. The alternative of joining the `docker`
+group gives effectively administrator-level access to your computer; see
+[Docker's Linux setup notes](https://docs.docker.com/engine/install/linux-postinstall/)
+before choosing that approach.
 
-The quick start uses port `8080` on both sides, so it doesn't need privileged
-ports. The [HTTPS example](#https) publishes host ports `80` and `443`, which
-may need extra host configuration with rootless Docker even though Apache
-uses unprivileged ports inside the container.
+The quick start uses port `8080` on both your computer and the container.
+The [HTTPS example](#https) uses ports `80` and `443` on your computer;
+opening these lower-numbered ports may need extra setup with rootless Docker,
+even though Apache uses higher-numbered ports inside the container.
+
+### macOS and Windows
+
+These images run Linux software. Docker Desktop provides the Linux
+environment on macOS and Windows.
+
+- **macOS:** install [Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/),
+  then run the examples in Terminal. Keep your project in a folder Docker
+  Desktop can share, such as a folder under your home directory.
+- **Windows:** install [WSL 2 (Windows Subsystem for Linux)](https://learn.microsoft.com/en-us/windows/wsl/install)
+  and [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/).
+  WSL lets you run Linux tools on Windows. Follow
+  [Docker's WSL setup guide](https://docs.docker.com/desktop/features/wsl/) to
+  connect Docker to your installed Linux system, such as Ubuntu. Open Ubuntu
+  from the Start menu and run this guide's examples in its terminal, not in
+  PowerShell or Command Prompt.
+
+On Windows, keep the project in your Linux home folder, such as
+`~/projects/my-app` (`~` means your home folder). Avoid `/mnt/c`, which is
+your Windows C: drive as seen from Linux. You can edit Linux files from the
+Windows desktop with [Visual Studio Code's WSL extension](https://code.visualstudio.com/docs/remote/wsl).
+
+You don't need to change the container user to match a macOS or Windows
+account. Docker Desktop handles sharing files with the container, but your
+folders must still allow the access your application needs. Keep MySQL in a
+Docker-managed volume rather than a folder shared from macOS or Windows.
+
+See the [platform permission notes](examples/README.md#macos-and-windows)
+and run the small write test there before using uploads or cache folders.
+Don't copy Linux ownership or permission commands onto macOS or Windows
+without checking which filesystem they apply to.
 
 ### On the command line
 
-1. Put your PHP files in an `app` directory. To try the image in an empty
-   project, create a simple page:
+1. Put your PHP files in an `app` directory (folder). To try the image in
+   an empty project, create a simple page:
 
    ```bash
    mkdir -p app
@@ -123,8 +166,9 @@ intend to delete its databases.
 
 ### Adding your own content
 
-The `app` mount is a **bind mount**: your local directory appears at `/app`
-inside the container. It isn't a copy of your code. Edit the files with your
+The `app` mount is a [bind mount](https://docs.docker.com/engine/storage/bind-mounts/):
+your local directory appears at `/app` inside the container. It isn't a copy
+of your code. Edit the files with your
 usual editor and refresh the browser to see the changes, subject to any
 application caching. You don't need to rebuild the image.
 
@@ -133,12 +177,13 @@ not stop you editing the files on your machine or change their ownership.
 The mount also hides the image's built-in `/app` files; their ownership does
 not override the permissions on your source directory.
 
-On a standard Linux Docker installation, directories with mode `0755` and
-files with mode `0644` are readable by the container even if your host UID
-isn't 1000. Private directories (`0700`) and files (`0600`) owned by another
-UID are not. Grant access only where needed, especially for files containing
-secrets. Docker Desktop and rootless Docker can map permissions differently;
-check access from inside the container rather than changing ownership blindly.
+On a standard Linux Docker installation, the usual directory permissions
+(`0755`) let other users open folders, and the usual file permissions (`0644`)
+let them read files. That includes the container user, even if your own UID
+isn't 1000. Owner-only permissions (`0700` for folders or `0600` for files)
+block access by a different user. Grant access only where needed, especially
+for files containing passwords. Docker Desktop and rootless Docker may
+translate user IDs differently, so test access before changing ownership.
 
 If your application serves from a `public` directory, add
 `-e APACHE_ROOT=/app/public` before the image name in `docker run`.
@@ -303,13 +348,14 @@ If an override causes trouble, recreate the container with
 `PHP_USER_OVERRIDES_DISABLED=1` to skip that directory without disabling the
 image's PHP configuration.
 
-Xdebug is off by default. Add `-e XDEBUG_ENABLED=1` to enable it for Apache,
-CLI, Composer, and `docker exec php`. Configure it with the usual
+[Xdebug](https://xdebug.org/docs/step_debug) lets you step through PHP code
+in your editor. It is off by default. Add `-e XDEBUG_ENABLED=1` to enable it
+for Apache, command-line PHP, Composer, and `docker exec php`. Configure it with
 `XDEBUG_MODE` and `XDEBUG_CONFIG` variables. For example, use
 `XDEBUG_MODE=debug` and
 `XDEBUG_CONFIG='client_host=host.docker.internal client_port=9003'`.
 On Linux, you may also need
-`--add-host=host.docker.internal:host-gateway` so that address reaches your IDE.
+`--add-host=host.docker.internal:host-gateway` so that address reaches your editor.
 
 ## HTTPS
 
@@ -355,8 +401,10 @@ it; the image does not repair volume ownership.
 
 ## Development
 
-You'll need Docker, Buildx, and Compose. From a checkout of this repository,
-choose your machine's architecture and run the tests:
+You'll need Docker with [Buildx](https://docs.docker.com/build/) to build the
+images and [Compose](https://docs.docker.com/compose/) to run the test
+containers together. After downloading or cloning this repository, open a
+terminal in its directory, choose your processor type, and run the tests:
 
 ```bash
 export DOCKER_DEFAULT_PLATFORM=linux/amd64  # Use linux/arm64 on an ARM machine.

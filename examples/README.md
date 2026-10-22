@@ -1,11 +1,13 @@
 # Running your application
 
-These examples keep code on your machine so you can edit it and view the
-changes through Docker. The source is mounted read-only; only the directories
-the application needs to write have writable mounts.
+These examples keep code on your computer so you can edit it and view the
+changes through Docker. PHP can read your source files but cannot change
+them. You give it write access to specific folders for uploads, caches, or
+other files the application needs to save.
 
 - [Before you start](#before-you-start)
 - [Directory permissions](#directory-permissions)
+  - [macOS and Windows](#macos-and-windows)
 - [A PHP app with uploads and a cache](#a-php-app-with-uploads-and-a-cache)
 - [WordPress](#wordpress)
 - [Concrete CMS (concrete5)](#concrete-cms-concrete5)
@@ -14,8 +16,9 @@ the application needs to write have writable mounts.
 ## Before you start
 
 Follow the [Docker setup notes](../README.md#running-without-root) first.
-Run each example from its own project directory, with application files in
-`app/`, and choose your image in the same shell:
+Run each example from its own project folder, with application files in
+`app/`. Choose your image by running this command in the same terminal you
+will use for the rest of the example:
 
 ```bash
 export LAMP_IMAGE=mattrayner/lamp:latest-2404-php8.5
@@ -24,24 +27,26 @@ export LAMP_IMAGE=mattrayner/lamp:latest-2404-php8.5
 See [image versions](../README.md#image-versions) for tag availability. For a
 local build, set `LAMP_IMAGE` to that image's tag instead.
 
-The CMS examples assume you have downloaded the application; Docker-LAMP
-doesn't install WordPress or Concrete for you. Check your exact release,
+The WordPress and Concrete examples assume you have downloaded the application;
+Docker-LAMP doesn't install it for you. Check your exact release,
 plugins, and themes against **PHP 8.5 and MySQL 9.7** before using an existing
-site. The upstream requirements linked below are a starting point, not a
-claim that every application or extension has been tested with this image.
+site. The applications' own requirements, linked below, are a starting point;
+not every application or extension has been tested with this image.
 
 Replace the example passwords before running the commands. Each example
 creates a separate database volume and application account. Those account
 settings only apply to an empty volume; changing them later doesn't reset
 passwords. Keep the admin password separate from the application's password.
 
-Ports are bound to `127.0.0.1` for local use. None of these examples publishes
-MySQL. Apache/PHP and MySQL still share UID `1000`, so read-only source is not
-isolation between services or between different sites. Use separate containers
-and database volumes for separate projects.
+The sites are available only on your own computer (`127.0.0.1`). The examples
+don't open a MySQL port to other computers. Apache/PHP and MySQL share the
+same Linux account, so read-only source does not stop PHP from accessing
+database files or readable passwords. Use separate containers and database
+volumes for separate projects.
 
 ## Directory permissions
 
+The **host** is your computer; the **container** runs the application.
 Your editor keeps writing to the host files normally. `readonly` in a Docker
 mount only affects access through that mount inside the container. For
 example, these two mounts make the source read-only but allow PHP to save
@@ -60,13 +65,17 @@ directory there would hide them.
 
 ### Preparing writable directories
 
-On native Linux with a regular Docker daemon and no user-namespace remapping:
+This recipe is for Docker Engine running directly on Linux, without special
+settings that translate user IDs between the host and container. If you use
+Docker Desktop, start with the [macOS and Windows notes](#macos-and-windows).
 
 - If `id -u` prints `1000`, directories you create will normally already be
   writable by the container user. No ownership change is needed.
-- If your UID differs, you can grant UID 1000 access using filesystem ACLs
-  on directories you own. This keeps your ownership and doesn't require
-  `sudo` to run `setfacl`.
+- If your UID differs, you can give UID 1000 access using an **access control
+  list (ACL)**: extra permission rules for a particular user. The
+  [`setfacl` command](https://man7.org/linux/man-pages/man1/setfacl.1.html)
+  changes these rules. On files you own, this keeps your ownership and
+  doesn't require `sudo`.
 
 For example, **after creating the generic app's directories below**, run:
 
@@ -79,32 +88,128 @@ done
 ```
 
 Use the corresponding writable directories for WordPress or Concrete.
-This grants access to existing files within those specific trees and sets
-defaults for files created under them. It doesn't change the rest of your
-source. The default ACL also gives your host user access to files created by
-PHP, although an application that explicitly changes their permissions can
-override it. If you don't own existing files, their owner or an administrator
-will need to grant access.
+This grants access to files inside those folders and their subfolders, and
+sets rules for files created there later. It doesn't change the rest of your
+source. The rules also let your own account edit files created by PHP. An
+application that sets stricter permissions can still block that access.
+If you don't own existing files, their owner or an administrator will need
+to grant access.
 
-`setfacl` must be installed and the filesystem must support ACLs. If either
-is unavailable, ask whoever manages the host to prepare a suitable shared
-group or ACL. Don't use `chmod 777` or recursively change ownership of the
-whole project.
+If `setfacl` is missing, look for the `acl` package in your Linux system's
+package manager. Installing it may require administrator access. The disk
+must also support these permission rules. If it doesn't, ask whoever manages
+the computer to help set up access. Don't use `chmod 777`, which gives every
+user write access, or change ownership of the whole project.
 
-Docker Desktop, rootless Docker, and user-namespace remapping handle host
-IDs differently. The numeric-UID recipe above is not universal. Use your
-Docker installation's file-sharing or mapped-ID permissions, then check
-access with the container user as shown below.
+Docker Desktop, [rootless Docker](https://docs.docker.com/engine/security/rootless/),
+and [user-namespace remapping](https://docs.docker.com/engine/security/userns-remap/)
+can translate user IDs. In those setups, a host user numbered 1000 isn't
+necessarily the container user numbered 1000. Check how your Docker
+installation handles IDs before using the recipe above.
 
-Source files and their directories must also be readable and traversable by
-the container. Normal `0644` files and `0755` directories work on native
-Linux. Give private configuration files targeted read access rather than
-making secrets world-readable.
+The container must also be able to read source files and open the folders
+that contain them. The usual `0644` file and `0755` folder permissions allow
+this on Linux. For files containing passwords, grant access to the specific
+user that needs it rather than letting everyone read them.
+
+### macOS and Windows
+
+The container uses Linux user and group IDs `1000:1000`. Your macOS or Windows
+account does not need to match. Docker Desktop shares your folders with a
+Linux virtual machine (VM), which runs the container. Both the folder's
+permissions and Docker's sharing settings affect access. Use the
+[write check](#checking-access-before-startup).
+
+#### macOS with Docker Desktop
+
+1. Install and open [Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/).
+   Use Terminal for the commands in this guide. Docker chooses the image
+   for your processor automatically, whether you have an Intel or Apple
+   silicon Mac.
+2. Keep the project somewhere Docker Desktop can share, such as
+   `~/projects/my-app`. If you see `Mounts denied`, check **Settings →
+   Resources → File Sharing** and add the project directory if needed.
+   This is separate from granting PHP write permission.
+3. Make sure you can read the source and edit the data folders in your
+   editor. If Docker Desktop cannot access them, check for macOS privacy
+   prompts and [file permissions in Finder](https://support.apple.com/guide/mac-help/change-permissions-for-files-folders-or-disks-mchlp1203/mac).
+4. Run the write check for each uploads or cache folder. Don't change the
+   container user to match your Mac account or change the owner of your
+   whole project to UID 1000.
+
+If your editor can save files but the container cannot, check the folder's
+permissions and Desktop's sharing settings. Don't give everyone write
+access to the project as a workaround. The Linux `setfacl` commands above
+are not instructions for changing permissions on a Mac.
+
+Use a [Docker volume](https://docs.docker.com/engine/storage/volumes/) for
+MySQL, as in the examples. Docker manages this storage inside its Linux VM
+rather than in your project folder. Volumes can also be faster for caches
+that you don't need to edit yourself. However, only the MySQL storage path
+has permissions prepared by this image: a volume for an application cache
+still needs its own setup. Don't replace a cache folder with an empty volume
+and assume PHP will be able to write to it.
+
+See Docker's [Mac permission requirements](https://docs.docker.com/desktop/setup/install/mac-permission-requirements/)
+and [file-sharing settings](https://docs.docker.com/desktop/settings-and-maintenance/settings/#file-sharing).
+
+#### Windows with Docker Desktop and WSL2
+
+WSL means **Windows Subsystem for Linux**. It lets you use Linux tools while
+working on Windows, without replacing Windows.
+
+1. Follow [Microsoft's WSL installation guide](https://learn.microsoft.com/en-us/windows/wsl/install)
+   to install WSL 2 and a Linux system such as Ubuntu. This setup may ask
+   you to use PowerShell as an administrator and restart your computer.
+2. Install [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/)
+   and follow [Docker's WSL setup guide](https://docs.docker.com/desktop/features/wsl/).
+   Enable **Use WSL 2 based engine**, then select Ubuntu (or the Linux system
+   you installed) under **Settings → Resources → WSL Integration**. Use
+   Linux containers, not Windows containers.
+3. Open Ubuntu from the Windows Start menu. Run this guide's application
+   commands in that Linux terminal, not in PowerShell or Command Prompt.
+   Create your project under your Linux home folder (`~`):
+
+   ```bash
+   mkdir -p ~/projects/my-app
+   cd ~/projects/my-app
+   ```
+
+4. Edit those files from Windows with a tool that supports WSL. For example,
+   install [Visual Studio Code](https://code.visualstudio.com/), then follow
+   its [WSL extension setup](https://code.visualstudio.com/docs/remote/wsl).
+   Once configured, run `code .` from the project folder in Ubuntu to open
+   it in your Windows editor while keeping the files in Linux.
+5. Run the write check for each data folder. Files in the Linux home folder
+   use Linux permissions. The earlier ACL recipe may help if your user ID
+   differs, but first check that Docker is not translating those IDs.
+
+In WSL, `/mnt/c` is the Windows C: drive. Keep your project in the Linux
+home folder instead: Docker recommends this for speed and for notifying
+applications when files change. Files on C: still depend on Windows access
+rules, even when opened from Linux. Running `chmod`, `chown`, or `setfacl`
+there cannot simply bypass a Windows permission or read-only restriction.
+If you must keep the project on C:, check the Windows folder permissions
+and test every writable mount.
+
+If you write shell scripts for database initialization, save them with
+Linux line endings (`LF`, not Windows `CRLF`) and mark them executable inside
+WSL. Your editor's status bar usually has a line-ending selector. Windows
+line endings can stop a script from running even when permissions are correct.
+
+See Docker's [WSL setup](https://docs.docker.com/desktop/features/wsl/),
+[bind-mount recommendations](https://docs.docker.com/desktop/features/wsl/best-practices/),
+and Microsoft's [WSL file-permission explanation](https://learn.microsoft.com/en-us/windows/wsl/file-permissions).
+
+The mount examples have passed basic checks on Linux. These macOS and Windows
+notes follow the official guides, but the project's automated Linux tests
+do not test Docker Desktop on those systems.
 
 ### Checking access before startup
 
-This starts a shell as the image's normal user, not as root, and tries to
-create and remove a temporary file. It does not start Apache or MySQL:
+After creating a data folder, run this small test to check that the container
+can write to it. It uses the image's normal account, creates a temporary file,
+then deletes that file. It does not start Apache or MySQL:
 
 ```bash
 docker run --rm --entrypoint sh \
@@ -116,10 +221,11 @@ docker run --rm --entrypoint sh \
   '
 ```
 
-Run it after preparing the directory. Replace `app/public/uploads` with each
-writable directory from your chosen example, including the cache. If it
-fails with `Permission denied`, fix the host permissions before starting the
-application. A writable mount allows writes; it doesn't grant file permissions.
+Replace `app/public/uploads` with each writable folder from your chosen
+example, including the cache. A successful check prints the account details
+and finishes without an error. If it says `Permission denied`, fix access to
+that folder before starting the application. Making a Docker mount writable
+doesn't change the folder's own permissions.
 
 ## A PHP app with uploads and a cache
 
@@ -196,7 +302,8 @@ supports it, and check your themes and plugins too. See the
 [WordPress requirements](https://wordpress.org/about/requirements/) for
 database and server requirements.
 
-1. Download WordPress into `app/`. `app/index.php`, `app/wp-admin/`, and
+1. [Download WordPress](https://wordpress.org/download/) and extract it into
+   `app/`. `app/index.php`, `app/wp-admin/`, and
    `app/wp-content/` should exist. Prepare the upload directory and copy the
    sample configuration if this is an unconfigured installation:
 
@@ -280,7 +387,8 @@ and `app/concrete/` directly under `app/`. A Composer project may put the web
 root in `public/`; adjust `APACHE_ROOT` and all mount paths to match rather
 than exposing the entire Composer project.
 
-1. Extract the release into `app/`. Concrete's
+1. [Download Concrete CMS](https://www.concretecms.org/download) and extract
+   the release into `app/`. Concrete's
    [installation guide](https://documentation.concretecms.org/9-x/developers/introduction/installing-concrete-cms)
    requires these directories to be writable:
 
