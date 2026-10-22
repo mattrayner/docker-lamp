@@ -20,7 +20,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PHP_TIMEZONE=Europe/London \
     APACHE_ROOT=/app \
     PHP_INI_SCAN_DIR=/opt/php/etc/conf.d:/run/lamp/php/conf.d \
-    PATH=/opt/php/bin:${PATH}
+    PATH=/usr/local/bin:/opt/php/bin:${PATH}
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -66,8 +66,12 @@ COPY --chmod=755 runtime/mysql-init.sh /usr/local/bin/mysql-init
 COPY --chmod=755 runtime/start-apache2.sh /usr/local/bin/start-apache2
 COPY --chmod=755 runtime/start-mysqld.sh /usr/local/bin/start-mysqld
 COPY --chmod=755 runtime/supervisor-watchdog.sh /usr/local/bin/supervisor-watchdog
+COPY --chmod=755 runtime/php /usr/local/bin/php
+COPY --chmod=755 runtime/docker-lamp-backup /usr/local/bin/docker-lamp-backup
+COPY --chmod=755 runtime/docker-lamp-restore /usr/local/bin/docker-lamp-restore
 
 RUN printf '%s\n' 'LoadModule php_module /usr/lib/apache2/modules/libphp.so' > /etc/apache2/mods-available/php8.5.load \
+    && rm -f /opt/php/etc/conf.d/*xdebug*.ini \
     && printf '%s\n' \
         '<IfModule php_module>' \
         '    <FilesMatch "\\.php$">' \
@@ -79,13 +83,14 @@ RUN printf '%s\n' 'LoadModule php_module /usr/lib/apache2/modules/libphp.so' > /
         '    DirectoryIndex index.php index.html' \
         '</IfModule>' > /etc/apache2/mods-available/php8.5.conf \
     && a2dismod mpm_event \
-    && a2enmod mpm_prefork php8.5 rewrite \
+    && a2enmod mpm_prefork php8.5 rewrite ssl \
     && printf '%s\n' 'ServerName localhost' > /etc/apache2/conf-available/docker-lamp-servername.conf \
     && a2enconf docker-lamp-servername \
     && a2dissite 000-default \
     && a2ensite docker-lamp \
-    && sed -ri 's/^Listen 80$/Listen 8080/' /etc/apache2/ports.conf \
-    && install -d -o 1000 -g 1000 -m 0755 /run/lamp /run/mysql /var/lib/mysql /app \
+    && printf '%s\n' 'Listen 8080' > /etc/apache2/ports.conf \
+    && install -d -o 1000 -g 1000 -m 0755 /run/lamp /run/mysql /var/lib/mysql /app /etc/docker-lamp/php/conf.d /etc/docker-lamp/php/xdebug-enabled \
+    && printf '%s\n' 'zend_extension=xdebug.so' > /etc/docker-lamp/php/xdebug-enabled/20-xdebug.ini \
     && rm -rf /var/www/html \
     && ln -s /app /var/www/html
 
@@ -100,6 +105,6 @@ COPY --chown=0:0 app/ /app/
 RUN chown -R 0:0 /app && chmod -R a-w /app
 
 VOLUME ["/var/lib/mysql"]
-EXPOSE 8080 3306
+EXPOSE 8080 8443 3306
 USER 1000:1000
 CMD ["/run.sh"]

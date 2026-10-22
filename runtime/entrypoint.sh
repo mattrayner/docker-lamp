@@ -7,6 +7,10 @@ source /usr/local/lib/docker-lamp/runtime.sh
 validate_rootless_runtime
 validate_apache_root
 mysql_validate_bind_address
+MYSQL_USE_NATIVE_AIO=$(validate_boolean MYSQL_USE_NATIVE_AIO 1)
+export MYSQL_USE_NATIVE_AIO
+validate_php_configuration
+validate_apache_tls
 
 ensure_runtime_directory /run/lamp
 ensure_runtime_directory /run/lamp/apache2
@@ -24,7 +28,52 @@ mysqli.default_socket = /run/mysql/mysqld.sock
 pdo_mysql.default_socket = /run/mysql/mysqld.sock
 EOF
 
-cat > /run/mysql/docker-lamp.cnf <<'EOF'
+rm -f /run/lamp/apache2/tls.conf /run/lamp/apache2/http-redirect.conf
+if [[ "${APACHE_TLS_ENABLED}" == 1 ]]; then
+    cat > /run/lamp/apache2/http-redirect.conf <<'EOF'
+RewriteEngine On
+# Native TLS is documented as a public 443 -> container 8443 mapping. Strip
+# any HTTP authority port so requests received on 80 or 8080 never redirect
+# clients back to an HTTP port. This does not trust forwarded headers.
+RewriteCond %{HTTP_HOST} ^(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]+)(?::[0-9]+)?$
+RewriteRule ^ https://%1%{REQUEST_URI} [R=302,L,NE]
+RewriteRule ^ https://localhost%{REQUEST_URI} [R=302,L,NE]
+EOF
+    cat > /run/lamp/apache2/tls.conf <<EOF
+Listen 8443
+<VirtualHost *:8443>
+    ServerAdmin webmaster@localhost
+    DocumentRoot "${APACHE_ROOT}"
+    SSLEngine on
+    SSLCertificateFile "${APACHE_TLS_CERT_FILE}"
+    SSLCertificateKeyFile "${APACHE_TLS_KEY_FILE}"
+    RedirectMatch 302 ^/adminer$ /adminer/
+    Alias /adminer/ /usr/local/share/adminer/
+    <Directory /usr/local/share/adminer>
+        Options -Indexes +FollowSymLinks
+        AllowOverride None
+        DirectoryIndex index.php
+        Require all granted
+    </Directory>
+    <Directory "${APACHE_ROOT}">
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    ErrorLog /dev/stderr
+    CustomLog /dev/stdout combined
+</VirtualHost>
+EOF
+fi
+
+# Test the generated Apache configuration before Supervisor can make the HTTP
+# endpoint healthy. start-apache2 exports the PHP scan configuration.
+APACHE_RUN_USER=lamp APACHE_RUN_GROUP="$(id -gn lamp)" APACHE_RUN_DIR=/run/lamp/apache2 \
+APACHE_PID_FILE=/run/lamp/apache2/apache2.pid APACHE_LOCK_DIR=/run/lamp/apache2 \
+APACHE_LOG_DIR=/run/lamp/apache2 \
+    apache2 -t >/dev/null || runtime_error "generated Apache configuration is invalid"
+
+cat > /run/mysql/docker-lamp.cnf <<EOF
 [mysqld]
 bind-address = __MYSQL_BIND_ADDRESS__
 port = 3306
@@ -34,6 +83,7 @@ socket = /run/mysql/mysqld.sock
 pid-file = /run/mysql/mysqld.pid
 character-set-server = utf8mb4
 collation-server = utf8mb4_0900_ai_ci
+innodb-use-native-aio = ${MYSQL_USE_NATIVE_AIO}
 EOF
 
 sed -i "s/__MYSQL_BIND_ADDRESS__/${MYSQL_BIND_ADDRESS}/" /run/mysql/docker-lamp.cnf
@@ -44,7 +94,11 @@ case "${mysql_state}" in
         # Validate and materialize credentials before the first datadir write.
         mysql_preflight_first_run
         mysql_write_state initializing
-        /usr/local/bin/mysql-init
+        if ! /usr/local/bin/mysql-init; then
+            runtime_error 'MySQL initialization did not complete; preserving initializing lifecycle state'
+        fi
+        [[ "$(mysql_data_state)" == ready ]] \
+            || runtime_error 'MySQL initialization did not produce ready lifecycle state'
         ;;
     ready)
         printf '%s\n' 'MySQL lifecycle state is ready; skipping account setup and initialization imports.'

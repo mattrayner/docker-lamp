@@ -8,9 +8,12 @@ services:
         PHP_ARTIFACT_IMAGE: ${TEST_PHP_ARTIFACT_IMAGE:-docker-lamp-php-artifact:2204}
     environment:
       MYSQL_ADMIN_PASS: test-admin-password-2204
+      # Native AIO uses a host-global allocation limit; disable it only in the
+      # concurrent test stack so unrelated test projects cannot exhaust it.
+      MYSQL_USE_NATIVE_AIO: "0"
     user: "1000:1000"
     ports:
-      - "3020:8080"
+      - "127.0.0.1::8080"
     tmpfs:
       - /var/lib/mysql:uid=1000,gid=1000,mode=0750
     volumes:
@@ -26,9 +29,10 @@ services:
         PHP_ARTIFACT_IMAGE: ${TEST_PHP_ARTIFACT_IMAGE:-docker-lamp-php-artifact:2404}
     environment:
       MYSQL_ADMIN_PASS: test-admin-password-2404
+      MYSQL_USE_NATIVE_AIO: "0"
     user: "1000:1000"
     ports:
-      - "3040:8080"
+      - "127.0.0.1::8080"
     tmpfs:
       - /var/lib/mysql:uid=1000,gid=1000,mode=0750
     volumes:
@@ -44,9 +48,10 @@ services:
         PHP_ARTIFACT_IMAGE: ${TEST_PHP_ARTIFACT_IMAGE:-docker-lamp-php-artifact:2604}
     environment:
       MYSQL_ADMIN_PASS: test-admin-password-2604
+      MYSQL_USE_NATIVE_AIO: "0"
     user: "1000:1000"
     ports:
-      - "3060:8080"
+      - "127.0.0.1::8080"
     tmpfs:
       - /var/lib/mysql:uid=1000,gid=1000,mode=0750
     volumes:

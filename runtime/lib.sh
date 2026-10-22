@@ -50,6 +50,51 @@ ensure_runtime_directory() {
         || runtime_error "${directory} must be a writable runtime mount prepared for ${LAMP_UID}:${LAMP_GID}"
 }
 
+validate_boolean() {
+    local name=$1 default=$2 value
+    value=${!name:-${default}}
+
+    [[ "${value}" == 0 || "${value}" == 1 ]] \
+        || runtime_error "${name} must be 0 or 1"
+    printf '%s' "${value}"
+}
+
+validate_php_configuration() {
+    PHP_USER_OVERRIDES_DISABLED=$(validate_boolean PHP_USER_OVERRIDES_DISABLED 0)
+    XDEBUG_ENABLED=$(validate_boolean XDEBUG_ENABLED 0)
+    export PHP_USER_OVERRIDES_DISABLED XDEBUG_ENABLED
+    if [[ "${PHP_USER_OVERRIDES_DISABLED}" == 0 ]]; then
+        [[ -d /etc/docker-lamp/php/conf.d && -r /etc/docker-lamp/php/conf.d && -x /etc/docker-lamp/php/conf.d ]] \
+            || runtime_error "/etc/docker-lamp/php/conf.d must be a readable directory"
+    fi
+    [[ -d /etc/docker-lamp/php/xdebug-enabled && -r /etc/docker-lamp/php/xdebug-enabled ]] \
+        || runtime_error "PHP Xdebug configuration is unavailable"
+}
+
+validate_apache_tls() {
+    APACHE_TLS_ENABLED=$(validate_boolean APACHE_TLS_ENABLED 0)
+    export APACHE_TLS_ENABLED
+    if [[ "${APACHE_TLS_ENABLED}" == 0 ]]; then
+        return
+    fi
+    : "${APACHE_TLS_CERT_FILE:?APACHE_TLS_CERT_FILE must be set when APACHE_TLS_ENABLED=1}"
+    : "${APACHE_TLS_KEY_FILE:?APACHE_TLS_KEY_FILE must be set when APACHE_TLS_ENABLED=1}"
+    [[ -f "${APACHE_TLS_CERT_FILE}" && -r "${APACHE_TLS_CERT_FILE}" ]] \
+        || runtime_error "APACHE_TLS_CERT_FILE must name a readable regular file"
+    [[ -f "${APACHE_TLS_KEY_FILE}" && -r "${APACHE_TLS_KEY_FILE}" ]] \
+        || runtime_error "APACHE_TLS_KEY_FILE must name a readable regular file"
+    [[ "${APACHE_TLS_CERT_FILE}" != *$'\n'* && "${APACHE_TLS_KEY_FILE}" != *$'\n'* \
+        && "${APACHE_TLS_CERT_FILE}" != *'"'* && "${APACHE_TLS_KEY_FILE}" != *'"'* ]] \
+        || runtime_error "TLS file paths contain unsupported characters"
+    openssl x509 -noout -in "${APACHE_TLS_CERT_FILE}" >/dev/null 2>&1 \
+        || runtime_error "APACHE_TLS_CERT_FILE is not a valid certificate"
+    openssl pkey -noout -in "${APACHE_TLS_KEY_FILE}" >/dev/null 2>&1 \
+        || runtime_error "APACHE_TLS_KEY_FILE is not a valid private key"
+    [[ "$(openssl x509 -pubkey -noout -in "${APACHE_TLS_CERT_FILE}" | openssl pkey -pubin -outform DER | sha256sum)" \
+        == "$(openssl pkey -pubout -outform DER -in "${APACHE_TLS_KEY_FILE}" | sha256sum)" ]] \
+        || runtime_error "TLS certificate and private key do not match"
+}
+
 mysql_runtime_error() {
     # Never include control values in diagnostics: these controls commonly hold
     # credentials supplied by an orchestrator Secret.
@@ -75,19 +120,82 @@ mysql_read_secret() {
         value=$(<"${file}")
         [[ -n "${value}" ]] || mysql_runtime_error "${file_name} must not name an empty file"
     fi
+    [[ "${value}" != *$'\n'* && "${value}" != *$'\r'* ]] \
+        || mysql_runtime_error "${value_name}/${file_name} must contain exactly one line"
+    if (( has_file )); then
+        php -r '$v = file_get_contents($argv[1]); exit(str_contains($v, "\0") ? 1 : 0);' "${file}" \
+            || mysql_runtime_error "${file_name} must not contain NUL bytes"
+    fi
     printf '%s' "${value}"
+}
+
+mysql_sql_literal() {
+    local value=$1
+    value=${value//\\/\\\\}
+    value=${value//\'/\\\'}
+    printf "'%s'" "${value}"
+}
+
+mysql_defaults_value() {
+    local value=$1
+    value=${value//\\/\\\\}
+    value=${value//\"/\\\"}
+    printf '"%s"' "${value}"
+}
+
+mysql_grant_database_target() {
+    local value=$1
+    value=${value//\\/\\\\}
+    value=${value//%/\\%}
+    value=${value//_/\\_}
+    value=${value//\`/\`\`}
+    printf '`%s`.*' "${value}"
+}
+
+mysql_validate_user_name() {
+    local name=$1
+
+    [[ "${name}" != *$'\n'* && "${name}" != *$'\r'* && "${name}" != *' ' \
+        && ${#name} -le 32 && "${name}" =~ ^[A-Za-z0-9][A-Za-z0-9_.%\$-]*$ ]] \
+        || mysql_runtime_error "MYSQL_USER_NAME contains unsupported characters or exceeds MySQL length limits"
+    case "${name}" in
+        root|admin|mysql.sys|mysql.session|mysql.infoschema) mysql_runtime_error "MYSQL_USER_NAME is reserved" ;;
+    esac
+}
+
+mysql_validate_database_name() {
+    local database=$1
+
+    # Database names are emitted both as quoted identifiers and as GRANT
+    # targets. Keep the accepted grammar deliberately narrower than user
+    # names: a period has SQL qualification semantics and is never valid here.
+    [[ "${database}" != *$'\n'* && "${database}" != *$'\r'* && "${database}" != *' ' \
+        && ${#database} -le 64 && "${database}" =~ ^[A-Za-z0-9][A-Za-z0-9_%\$-]*$ ]] \
+        || mysql_runtime_error "MYSQL_USER_DB contains unsupported database identifier syntax or exceeds MySQL length limits"
+    case "${database}" in
+        mysql|sys|performance_schema|information_schema) mysql_runtime_error "MYSQL_USER_DB is reserved" ;;
+    esac
+}
+
+mysql_validate_account_identifiers() {
+    mysql_validate_user_name "$1"
+    mysql_validate_database_name "$2"
 }
 
 mysql_validate_bind_address() {
     local bind_address=${MYSQL_BIND_ADDRESS:-127.0.0.1}
 
-    php -r 'exit(filter_var($argv[1], FILTER_VALIDATE_IP) === false ? 1 : 0);' "${bind_address}" \
-        || mysql_runtime_error "MYSQL_BIND_ADDRESS must be a supported literal IPv4 or IPv6 address"
+    local classification
+    classification=$(php -r '
+        $packed = inet_pton($argv[1]);
+        if ($packed === false) exit(1);
+        $mapped = strlen($packed) === 16 && substr($packed, 0, 12) === str_repeat("\0", 10) . "\xff\xff";
+        if ($mapped) exit(2);
+        $loopback = (strlen($packed) === 4 && ord($packed[0]) === 127) || $packed === inet_pton("::1");
+        echo $loopback ? "localhost" : "%";
+    ' "${bind_address}") || mysql_runtime_error "MYSQL_BIND_ADDRESS must be a supported non-mapped literal IPv4 or IPv6 address"
     export MYSQL_BIND_ADDRESS="${bind_address}"
-    case "${bind_address}" in
-        127.*|::1) export MYSQL_ACCOUNT_HOST_POLICY=localhost ;;
-        *) export MYSQL_ACCOUNT_HOST_POLICY=% ;;
-    esac
+    export MYSQL_ACCOUNT_HOST_POLICY="${classification}"
 }
 
 mysql_data_state() {
@@ -133,9 +241,10 @@ mysql_write_state() {
 }
 
 mysql_preflight_first_run() {
-    local input=/run/mysql/mysql-init-input
+    local input=/run/mysql/mysql-init-input manifest=/run/mysql/import-manifest import_file basename
     local admin_password app_password='' app_requested=0
     local control
+    local LC_ALL=C
 
     admin_password=$(mysql_read_secret MYSQL_ADMIN_PASS MYSQL_ADMIN_PASS_FILE)
     for control in MYSQL_USER_NAME MYSQL_USER_DB MYSQL_USER_PASS MYSQL_USER_PASS_FILE CREATE_MYSQL_BASIC_USER_AND_DB; do
@@ -144,9 +253,39 @@ mysql_preflight_first_run() {
     if (( app_requested )); then
         [[ -n "${MYSQL_USER_NAME:-}" && -n "${MYSQL_USER_DB:-}" ]] \
             || mysql_runtime_error "an application account requires non-empty MYSQL_USER_NAME and MYSQL_USER_DB"
+        mysql_validate_account_identifiers "${MYSQL_USER_NAME}" "${MYSQL_USER_DB}"
         app_password=$(mysql_read_secret MYSQL_USER_PASS MYSQL_USER_PASS_FILE)
         [[ -z "${CREATE_MYSQL_BASIC_USER_AND_DB+x}" ]] \
             || mysql_runtime_error "CREATE_MYSQL_BASIC_USER_AND_DB is not supported; provide the complete MYSQL_USER_* contract"
+    fi
+
+    : > "${manifest}"
+    chmod 0600 "${manifest}"
+    if [[ -e /docker-entrypoint-initdb.d ]]; then
+        [[ -d /docker-entrypoint-initdb.d && -r /docker-entrypoint-initdb.d && -x /docker-entrypoint-initdb.d ]] \
+            || mysql_runtime_error "/docker-entrypoint-initdb.d must be a readable searchable directory"
+        shopt -s nullglob
+        for import_file in /docker-entrypoint-initdb.d/*; do
+            basename=${import_file##*/}
+            [[ "${basename}" != *$'\n'* && -f "${import_file}" ]] \
+                || mysql_runtime_error "initialization imports must be regular single-line filenames"
+            case "${import_file}" in
+                *.sql)
+                    [[ -r "${import_file}" ]] || mysql_runtime_error "SQL initialization import is not readable"
+                    ;;
+                *.sql.gz)
+                    [[ -r "${import_file}" ]] || mysql_runtime_error "compressed SQL initialization import is not readable"
+                    gzip -t -- "${import_file}" >/dev/null 2>&1 \
+                        || mysql_runtime_error "compressed SQL initialization import is invalid"
+                    ;;
+                *)
+                    [[ -r "${import_file}" && -x "${import_file}" ]] \
+                        || mysql_runtime_error "initialization import must be .sql, .sql.gz, or a readable executable file"
+                    ;;
+            esac
+            printf '%s\n' "${import_file}" >> "${manifest}"
+        done
+        shopt -u nullglob
     fi
 
     umask 077

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# shellcheck source=lib.sh
+source /usr/local/lib/docker-lamp/runtime.sh
+
+usage() { printf '%s\n' 'Usage: docker-lamp-backup --database NAME' >&2; exit 2; }
+[[ $# == 2 && $1 == --database ]] || usage
+database=$2
+mysql_validate_database_name "${database}"
+password=$(mysql_read_secret MYSQL_ADMIN_PASS MYSQL_ADMIN_PASS_FILE)
+defaults=$(mktemp /run/lamp/mysql-backup.XXXXXX)
+trap 'rm -f "${defaults}"' EXIT
+umask 077
+printf '[client]\nuser=admin\npassword=%s\nprotocol=socket\nsocket=/run/mysql/mysqld.sock\n' \
+    "$(mysql_defaults_value "${password}")" > "${defaults}"
+
+mysql --defaults-extra-file="${defaults}" --skip-column-names --batch \
+    --execute "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = $(mysql_sql_literal "${database}")" \
+    | grep -Fxq "${database}" || runtime_error "backup target database does not exist"
+mysqldump --defaults-extra-file="${defaults}" --single-transaction --set-gtid-purged=OFF \
+    --routines --events -- "${database}"

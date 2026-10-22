@@ -72,13 +72,12 @@ RUN set -eux; \
     make -j"$(nproc)"; \
     make install; \
     printf '%s\n' 'extension=apcu.so' 'apc.enable_cli=1' > "${PHP_PREFIX}/etc/conf.d/20-apcu.ini"; \
-    printf '%s\n' 'zend_extension=xdebug.so' > "${PHP_PREFIX}/etc/conf.d/20-xdebug.ini"; \
     "${PHP_PREFIX}/bin/php" --version > /usr/local/share/php-build-metadata/php-version.txt; \
     "${PHP_PREFIX}/bin/php-config" --configure-options > /usr/local/share/php-build-metadata/configure-options.txt; \
     "${PHP_PREFIX}/bin/php" -m | sort > /usr/local/share/php-build-metadata/modules.txt; \
     test -f /usr/lib/apache2/modules/libphp.so; \
     "${PHP_PREFIX}/bin/php" -m | grep -qx apcu; \
-    "${PHP_PREFIX}/bin/php" -m | grep -qx xdebug; \
+    "${PHP_PREFIX}/bin/php" -d zend_extension=xdebug.so -m | grep -qx xdebug; \
     rm -rf /root/.gnupg /usr/src/php-* /tmp/apcu-5.1.28 /tmp/apcu-5.1.28.tgz /tmp/php.tar.xz /tmp/php.tar.xz.asc /tmp/php-keyring.gpg /tmp/php-release-keyring.gpg /tmp/xdebug-3.5.3 /tmp/xdebug-3.5.3.tgz
 
 FROM scratch AS artifact

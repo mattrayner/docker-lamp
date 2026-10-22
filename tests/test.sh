@@ -2,6 +2,8 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+"${SCRIPT_DIR}/test-compose-project-name.sh"
+"${SCRIPT_DIR}/test-kubernetes-manifest.sh"
 # shellcheck source=_helpers.sh
 source "${SCRIPT_DIR}/_helpers.sh"
 
@@ -43,5 +45,11 @@ for variant in "${VARIANTS[@]}"; do
 done
 
 if [[ "${RUN_ROOTLESS_RUNTIME_TESTS:-0}" == 1 ]]; then
-    "${SCRIPT_DIR}/test-rootless-runtime.sh"
+    # MySQL reserves native-AIO slots per running service.  Tear down the
+    # completed behavioral stack before starting the separate rootless stack,
+    # otherwise the six concurrent variant services can exhaust the host-wide
+    # AIO limit and make a healthy matrix fail during MySQL initialization.
+    compose down --volumes --remove-orphans
+    # Keep the nested suite isolated: it rebuilds and tears down its own stack.
+    TEST_COMPOSE_PROJECT="${COMPOSE_PROJECT}-rootless" "${SCRIPT_DIR}/test-rootless-runtime.sh"
 fi

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# shellcheck source=lib.sh
+source /usr/local/lib/docker-lamp/runtime.sh
+
+usage() { printf '%s\n' 'Usage: docker-lamp-restore --database NAME [--input FILE]' >&2; exit 2; }
+[[ $# == 2 || $# == 4 ]] || usage
+[[ $1 == --database ]] || usage
+database=$2
+input=''
+if [[ $# == 4 ]]; then
+    [[ $3 == --input && -f $4 && -r $4 ]] || runtime_error "restore input must be a readable regular file"
+    input=$4
+fi
+mysql_validate_database_name "${database}"
+password=$(mysql_read_secret MYSQL_ADMIN_PASS MYSQL_ADMIN_PASS_FILE)
+defaults=$(mktemp /run/lamp/mysql-restore.XXXXXX)
+trap 'rm -f "${defaults}"' EXIT
+umask 077
+printf '[client]\nuser=admin\npassword=%s\nprotocol=socket\nsocket=/run/mysql/mysqld.sock\n' \
+    "$(mysql_defaults_value "${password}")" > "${defaults}"
+
+mysql --defaults-extra-file="${defaults}" --skip-column-names --batch \
+    --execute "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = $(mysql_sql_literal "${database}")" \
+    | grep -Fxq "${database}" || runtime_error "restore target database does not exist"
+if [[ -n "${input}" ]]; then
+    mysql --defaults-extra-file="${defaults}" "${database}" < "${input}"
+else
+    mysql --defaults-extra-file="${defaults}" "${database}"
+fi

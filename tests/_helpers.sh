@@ -2,7 +2,23 @@
 
 readonly PROJECT_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
 readonly COMPOSE_FILE="${PROJECT_ROOT}/docker-compose.test.yml"
-readonly COMPOSE_PROJECT="ci"
+
+test_compose_project() {
+    local project=${TEST_COMPOSE_PROJECT:-${COMPOSE_PROJECT_NAME:-}}
+
+    if [[ -z "${project}" ]]; then
+        # A PID is unique among concurrently running local test invocations.
+        # Keep the prefix stable so Docker resources remain recognizable.
+        project="docker-lamp-test-${BASHPID}"
+    fi
+    [[ "${project}" =~ ^[a-z0-9][a-z0-9_-]*$ ]] \
+        || { echo "TEST_COMPOSE_PROJECT must be a valid Docker Compose project name." >&2; return 1; }
+    printf '%s' "${project}"
+}
+
+compose_project=$(test_compose_project) || exit $?
+readonly COMPOSE_PROJECT="${compose_project}"
+readonly COMPOSE_NETWORK="${COMPOSE_PROJECT}_default"
 readonly DEFAULT_VARIANTS=(2204 2404 2604)
 if [[ -n "${TEST_VARIANTS:-}" ]]; then
     # Candidate CI supplies one release variant so it can test one immutable
@@ -36,15 +52,12 @@ select_variant() {
     case "${variant}" in
         2204)
             OS_VERSION='22.04'
-            WEB_PORT='3020'
             ;;
         2404)
             OS_VERSION='24.04'
-            WEB_PORT='3040'
             ;;
         2604)
             OS_VERSION='26.04'
-            WEB_PORT='3060'
             ;;
         *)
             fail "unknown Ubuntu variant ${variant}"
@@ -53,6 +66,7 @@ select_variant() {
 
     SERVICE="web${variant}"
     ADMIN_PASSWORD="test-admin-password-${variant}"
+    WEB_PORT=''
 }
 
 dump_diagnostics() {
@@ -99,8 +113,8 @@ start_fresh_stack() {
     local -a services=()
     local variant
 
-    # The ci project is removed before each suite, so every variant starts with
-    # an empty tmpfs-backed MySQL data directory.
+    # This invocation's project is removed before each suite, so every variant
+    # starts with an empty tmpfs-backed MySQL data directory.
     compose down --volumes --remove-orphans || true
     for variant in "${VARIANTS[@]}"; do
         services+=("web${variant}")
@@ -108,6 +122,8 @@ start_fresh_stack() {
 
     if [[ "${PREBUILT_FINAL_IMAGES:-0}" == 1 ]]; then
         : "${TEST_IMAGE:?TEST_IMAGE must identify the prebuilt final image.}"
+        [[ "${TEST_IMAGE}" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]] \
+            || fail "prebuilt final-image tests require TEST_IMAGE to be an immutable sha256 digest reference"
         [[ ${#VARIANTS[@]} -eq 1 ]] || fail "prebuilt final-image tests require exactly one TEST_VARIANTS entry"
         compose pull "${services[@]}"
         compose up --detach --no-build --force-recreate --renew-anon-volumes "${services[@]}"
@@ -151,11 +167,23 @@ web_exec() {
     compose exec -T "${SERVICE}" "$@"
 }
 
+resolve_web_port() {
+    local binding
+
+    binding=$(compose port "${SERVICE}" 8080)
+    case "${binding}" in
+        127.0.0.1:*) WEB_PORT=${binding##*:} ;;
+        *) fail "${SERVICE} did not publish Apache on loopback" ;;
+    esac
+    [[ "${WEB_PORT}" =~ ^[0-9]+$ ]] || fail "${SERVICE} published an invalid Apache port"
+}
+
 supervisor_running() {
     web_exec supervisorctl status "$1" | grep -Eq "^$1[[:space:]]+RUNNING"
 }
 
 http_page_available() {
+    resolve_web_port
     curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:${WEB_PORT}/" \
         | grep -q "Welcome to"
 }
@@ -187,7 +215,7 @@ test_operating_system() {
 
 test_cli_php() {
     local extension
-    local -a required_extensions=(apcu curl gd mbstring mysqli pdo_mysql xml zip xdebug)
+    local -a required_extensions=(apcu curl gd mbstring mysqli pdo_mysql xml zip)
 
     echo "Checking PHP >= 8.5.12 CLI and required extensions"
     web_exec php -r 'exit(version_compare(PHP_VERSION, "8.5.12", ">=") ? 0 : 1);'
@@ -195,12 +223,15 @@ test_cli_php() {
         web_exec php -m | tr '[:upper:]' '[:lower:]' | grep -Fxq "${extension}" \
             || fail "PHP CLI extension ${extension} is not loaded"
     done
+    ! web_exec php -m | tr '[:upper:]' '[:lower:]' | grep -Fxq xdebug \
+        || fail "PHP CLI loaded Xdebug without an explicit opt-in"
 }
 
 test_apache_php_and_rewrite() {
     local response apache_php_version
 
     echo "Checking Apache, mod_rewrite, and Apache PHP >= 8.5.12"
+    resolve_web_port
     web_exec bash -ec '
         export APACHE_CONFDIR=/etc/apache2
         . /etc/apache2/envvars
@@ -229,6 +260,7 @@ test_static_serving() {
     local response
 
     echo "Checking Apache static-file serving"
+    resolve_web_port
     response=$(curl --fail --silent --show-error --max-time 10 \
         "http://127.0.0.1:${WEB_PORT}/static-check.txt")
     [[ "${response}" == 'docker-lamp static fixture' ]] \
@@ -242,6 +274,7 @@ test_php_runtime_dependencies() {
         'upload_max_filesize=10M'
         'post_max_size=10M'
         'timezone=Europe/London'
+        'xdebug=disabled'
         'apcu=ok'
         'curl=ok'
         'gd=ok'
@@ -253,6 +286,7 @@ test_php_runtime_dependencies() {
     )
 
     echo "Checking mod_php configuration and PHP runtime dependencies"
+    resolve_web_port
     if ! response=$(curl --fail --silent --show-error --max-time 15 \
         --header "X-Docker-Lamp-Test-Admin-Password: ${ADMIN_PASSWORD}" \
         "http://127.0.0.1:${WEB_PORT}/runtime-check.php"); then
@@ -312,8 +346,8 @@ test_mysql_utf8mb4_and_restore() {
 }
 
 test_xdebug_coverage() {
-    echo "Checking Xdebug callable code-coverage support"
-    web_exec env XDEBUG_MODE=coverage php -d xdebug.mode=coverage -r '
+    echo "Checking opt-in Xdebug callable code-coverage support"
+    web_exec env XDEBUG_ENABLED=1 XDEBUG_MODE=coverage php -d xdebug.mode=coverage -r '
         if (!function_exists("xdebug_start_code_coverage")) {
             exit(1);
         }
@@ -334,7 +368,9 @@ test_composer() {
         trap "rm -rf \"${working_directory}\"" EXIT
         cd "${working_directory}"
         printf "%s\\n" '\''{"name":"docker-lamp/dependency-check","description":"Local Composer validation test","license":"MIT","require":{}}'\'' > composer.json
+        ! php -m | tr "[:upper:]" "[:lower:]" | grep -Fx xdebug
         composer --version | grep -Eq "^Composer version 2\\.10\\.3 "
+        XDEBUG_ENABLED=1 composer --version | grep -Eq "^Composer version 2\\.10\\.3 "
         COMPOSER_DISABLE_NETWORK=1 COMPOSER_ROOT_VERSION=1.0.0 composer validate --no-check-publish
     '
 }
@@ -370,6 +406,7 @@ test_supervisor_apache_recovery() {
 }
 
 test_adminer() {
+    resolve_web_port
     local adminer_url="http://127.0.0.1:${WEB_PORT}/adminer/"
     local cookie_jar response login_token
 
@@ -435,6 +472,7 @@ test_fresh_container() {
     web_exec env MYSQL_PWD="${ADMIN_PASSWORD}" mysql --protocol=TCP -h 127.0.0.1 -P 3306 -uadmin \
         --execute "CREATE DATABASE ${database}"
     compose up --detach --force-recreate --renew-anon-volumes "${SERVICE}"
+    WEB_PORT=''
     wait_for "${SERVICE} MySQL after recreation" mysql_admin_login
 
     if web_exec env MYSQL_PWD="${ADMIN_PASSWORD}" mysql --protocol=TCP -h 127.0.0.1 -P 3306 -uadmin --skip-column-names --batch --execute \

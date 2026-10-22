@@ -24,13 +24,39 @@ jobs:
     if: github.event_name != 'release' || github.event.release.prerelease
     strategy:
       fail-fast: false
+      # Each job owns a runner and Compose project. Keep only the two native
+      # runners active at once so the rootless MySQL fixtures cannot contend
+      # for a host's native-AIO allocation.
+      max-parallel: 2
       matrix:
         include:
-          - runner: ubuntu-24.04
+          - version: '2204'
+            runner: ubuntu-24.04
             platform: linux/amd64
-          - runner: ubuntu-24.04-arm
+            architecture: amd64
+          - version: '2204'
+            runner: ubuntu-24.04-arm
             platform: linux/arm64
+            architecture: arm64
+          - version: '2404'
+            runner: ubuntu-24.04
+            platform: linux/amd64
+            architecture: amd64
+          - version: '2404'
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            architecture: arm64
+          - version: '2604'
+            runner: ubuntu-24.04
+            platform: linux/amd64
+            architecture: amd64
+          - version: '2604'
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            architecture: arm64
     runs-on: ${{ matrix.runner }}
+    env:
+      TEST_COMPOSE_PROJECT: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.version }}-${{ matrix.architecture }}
 
     steps:
       - name: Check out source
@@ -39,16 +65,210 @@ jobs:
           # Release builds must test the exact tag being published.
           ref: ${{ github.event.release.tag_name || inputs.ref || github.sha }}
 
-      - name: Run ${{ matrix.platform }} integration suite
+      - name: Run Ubuntu ${{ matrix.version }} ${{ matrix.platform }} integration and rootless suites
         env:
           DOCKER_DEFAULT_PLATFORM: ${{ matrix.platform }}
+          TEST_VARIANTS: ${{ matrix.version }}
+          RUN_ROOTLESS_RUNTIME_TESTS: '1'
         run: bash tests/test.sh
 
       - name: Collect Docker Compose logs
         if: failure()
         run: |
-          docker compose -f docker-compose.test.yml -p ci ps || true
-          docker compose -f docker-compose.test.yml -p ci logs --no-color || true
+           docker compose -f docker-compose.test.yml -p "${TEST_COMPOSE_PROJECT}" ps || true
+           docker compose -f docker-compose.test.yml -p "${TEST_COMPOSE_PROJECT}" logs --no-color || true
+
+  kubernetes-restricted:
+    # Run after the native matrix, but do not add a credentialed or publishing
+    # path for PRs, pushes, manual runs, or prereleases.
+    needs: integration
+    if: github.event_name != 'release' || github.event.release.prerelease
+    runs-on: ubuntu-24.04
+    env:
+      KIND_CLUSTER: docker-lamp-restricted-ci
+      KUBERNETES_NAMESPACE: docker-lamp-restricted-ci
+      KUBERNETES_IMAGE: docker-lamp-k8s:2404
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.ref || github.sha }}
+
+      - name: Build the native image used by the live Kubernetes check
+        run: |
+          set -Eeuo pipefail
+          docker build --platform linux/amd64 --file php-builder/Dockerfile --target artifact \
+            --build-arg UBUNTU_VERSION=24.04 --build-arg PHP_VERSION=8.5.12 \
+            --tag docker-lamp-k8s-php:2404 .
+          docker build --platform linux/amd64 --file 2404/Dockerfile \
+            --build-arg PHP_ARTIFACT_IMAGE=docker-lamp-k8s-php:2404 \
+            --tag "${KUBERNETES_IMAGE}" .
+
+      - name: Create a Restricted-admission kind cluster
+        uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: docker-lamp-restricted-ci
+
+      - name: Apply and validate the Restricted deployment live
+        run: |
+          set -Eeuo pipefail
+          kubectl create namespace "${KUBERNETES_NAMESPACE}"
+          kubectl label namespace "${KUBERNETES_NAMESPACE}" \
+            pod-security.kubernetes.io/enforce=restricted \
+            pod-security.kubernetes.io/enforce-version=latest
+          kind load docker-image --name "${KIND_CLUSTER}" "${KUBERNETES_IMAGE}"
+
+          kubectl create secret generic mysql-admin-password \
+            --namespace "${KUBERNETES_NAMESPACE}" \
+            --from-literal=password=restricted-ci-password \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply --namespace "${KUBERNETES_NAMESPACE}" -f - <<'YAML'
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: lamp-mysql-data
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 1Gi
+          YAML
+          # The production template deliberately requires operators to create
+          # this subPath out of band. Provision it with the same non-root,
+          # Restricted-compatible identity before applying that template.
+          kubectl apply --namespace "${KUBERNETES_NAMESPACE}" -f - <<'YAML'
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: prepare-mysql-subpath
+          spec:
+            template:
+              spec:
+                restartPolicy: Never
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 1000
+                  runAsGroup: 1000
+                  fsGroup: 1000
+                  seccompProfile:
+                    type: RuntimeDefault
+                containers:
+                  - name: prepare
+                    image: busybox:1.36
+                    command: ["/bin/sh", "-ec", "mkdir -p /data/mysql && test -w /data/mysql"]
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop: ["ALL"]
+                    volumeMounts:
+                      - name: mysql-data
+                        mountPath: /data
+                volumes:
+                  - name: mysql-data
+                    persistentVolumeClaim:
+                      claimName: lamp-mysql-data
+          YAML
+          kubectl wait --namespace "${KUBERNETES_NAMESPACE}" --for=condition=complete job/prepare-mysql-subpath --timeout=120s
+
+          kustomize_dir=$(mktemp -d)
+          cp kubernetes/restricted-deployment.yaml "${kustomize_dir}/restricted-deployment.yaml"
+          printf '%s\n' \
+            'resources:' \
+            '- restricted-deployment.yaml' \
+            'images:' \
+            '- name: mattrayner/lamp' \
+            '  newName: docker-lamp-k8s' \
+            '  newTag: "2404"' > "${kustomize_dir}/kustomization.yaml"
+          kubectl kustomize "${kustomize_dir}" | kubectl apply --namespace "${KUBERNETES_NAMESPACE}" -f -
+          kubectl rollout status --namespace "${KUBERNETES_NAMESPACE}" deployment/docker-lamp --timeout=240s
+
+          # Rollout only proves that Kubernetes considers the container ready.
+          # Wait for both application services, authenticating MySQL with the
+          # projected Secret, before inspecting the live security contract.
+          deadline=$((SECONDS + 120))
+          ready=0
+          attempt=0
+          while (( SECONDS < deadline )); do
+            ((attempt += 1))
+            remaining=$((deadline - SECONDS))
+            (( remaining > 0 )) || break
+            attempt_timeout=$(( remaining < 10 ? remaining : 10 ))
+            # Bound both kubectl exec calls with the runner's GNU timeout. The
+            # curl command also has its own connection and total-time limits.
+            if timeout --foreground --signal=KILL "${attempt_timeout}s" \
+                kubectl exec --namespace "${KUBERNETES_NAMESPACE}" deployment/docker-lamp -- \
+                curl --fail --silent --connect-timeout 3 --max-time "${attempt_timeout}" \
+                http://127.0.0.1:8080/ >/dev/null 2>&1; then
+              remaining=$((deadline - SECONDS))
+              (( remaining > 0 )) || break
+              attempt_timeout=$(( remaining < 10 ? remaining : 10 ))
+              if timeout --foreground --signal=KILL "${attempt_timeout}s" \
+                  kubectl exec --namespace "${KUBERNETES_NAMESPACE}" deployment/docker-lamp -- sh -ec '
+                    MYSQL_PWD="$(cat /run/secrets/mysql-admin/password)" mysql \
+                      --protocol=socket --socket=/run/mysql/mysqld.sock -uadmin \
+                      --connect-timeout=5 --execute "SELECT 1" >/dev/null
+                  ' >/dev/null 2>&1; then
+                ready=1
+                echo "HTTP and authenticated MySQL readiness checks passed on attempt ${attempt}."
+                break
+              fi
+            fi
+            remaining=$((deadline - SECONDS))
+            (( remaining > 0 )) || break
+            sleep "$(( remaining < 2 ? remaining : 2 ))"
+          done
+          (( ready == 1 )) || {
+            echo "Timed out after 120 seconds waiting for HTTP and authenticated MySQL readiness." >&2
+            exit 1
+          }
+
+          POD_JSON="$(kubectl get pods --namespace "${KUBERNETES_NAMESPACE}" -l app.kubernetes.io/name=docker-lamp -o json)" python3 - <<'PY'
+          import json
+          import os
+
+          pods = json.loads(os.environ["POD_JSON"])["items"]
+          assert len(pods) == 1, f"expected one docker-lamp Pod, found {len(pods)}"
+          pod = pods[0]
+          assert pod["status"]["phase"] == "Running", pod["status"]["phase"]
+          security = pod["spec"]["securityContext"]
+          assert security["runAsNonRoot"] is True
+          assert security["runAsUser"] == 1000
+          assert security["runAsGroup"] == 1000
+          assert security["fsGroup"] == 1000
+          assert security["seccompProfile"]["type"] == "RuntimeDefault"
+          container = next(item for item in pod["spec"]["containers"] if item["name"] == "lamp")
+          container_security = container["securityContext"]
+          assert container_security["allowPrivilegeEscalation"] is False
+          assert container_security["readOnlyRootFilesystem"] is True
+          assert container_security["capabilities"]["drop"] == ["ALL"]
+          print("Live Pod satisfies the Restricted security contract.")
+          PY
+          kubectl exec --namespace "${KUBERNETES_NAMESPACE}" deployment/docker-lamp -- sh -ec '
+            test "$(id -u)" = 1000
+            test "$(id -g)" = 1000
+            test ! -w /
+            test -w /run/lamp
+            test -w /run/mysql
+            test -w /tmp
+            test -w /var/lib/mysql
+            test -r /run/secrets/mysql-admin/password
+            test "$(awk "/CapEff/ {print \$2}" /proc/1/status)" = 0000000000000000
+            curl --fail --silent http://127.0.0.1:8080/ >/dev/null
+          '
+
+      - name: Collect Kubernetes diagnostics
+        if: failure()
+        run: |
+          kubectl get all --namespace "${KUBERNETES_NAMESPACE}" || true
+          kubectl describe deployment/docker-lamp --namespace "${KUBERNETES_NAMESPACE}" || true
+          kubectl logs --namespace "${KUBERNETES_NAMESPACE}" -l app.kubernetes.io/name=docker-lamp --all-containers=true --prefix || true
+
+      - name: Delete kind cluster
+        if: always()
+        run: kind delete cluster --name "${KIND_CLUSTER}" || true
 
   candidate:
     # Only a published, non-prerelease release receives Docker Hub credentials.
@@ -56,6 +276,9 @@ jobs:
     if: github.event_name == 'release' && !github.event.release.prerelease
     strategy:
       fail-fast: false
+      # Keep native candidate test environments isolated for the rootless
+      # runtime suite's native-AIO fixture as well.
+      max-parallel: 2
       matrix:
         include:
           - version: '2204'
@@ -92,6 +315,7 @@ jobs:
     env:
       IMAGE_NAME: ${{ vars.DOCKERHUB_USERNAME }}/lamp
       PHP_ARTIFACT_IMAGE_NAME: ${{ vars.DOCKERHUB_USERNAME }}/lamp-php
+      TEST_COMPOSE_PROJECT: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.version }}-${{ matrix.architecture }}
 
     steps:
       - name: Check out release tag
@@ -159,6 +383,7 @@ jobs:
           PREBUILT_FINAL_IMAGES: '1'
           TEST_PHP_ARTIFACT_IMAGE: ${{ env.PHP_CANDIDATE_REF }}@${{ steps.build_php.outputs.digest }}
           TEST_IMAGE: ${{ env.FINAL_CANDIDATE_REF }}@${{ steps.build_final.outputs.digest }}
+          RUN_ROOTLESS_RUNTIME_TESTS: '1'
         run: bash tests/test.sh
 
       - name: Export candidate metadata for digest promotion
@@ -207,8 +432,8 @@ jobs:
       - name: Collect Docker Compose logs
         if: failure()
         run: |
-          docker compose -f docker-compose.test.yml -p ci ps || true
-          docker compose -f docker-compose.test.yml -p ci logs --no-color || true
+          docker compose -f docker-compose.test.yml -p "${TEST_COMPOSE_PROJECT}" ps || true
+          docker compose -f docker-compose.test.yml -p "${TEST_COMPOSE_PROJECT}" logs --no-color || true
 
   promote:
     # Matrix success means all six native candidate builds were tested before

@@ -1,6 +1,6 @@
 <?php
 
-$required = ['apcu', 'curl', 'gd', 'mbstring', 'mysqli', 'pdo_mysql', 'xml', 'zip', 'xdebug'];
+$required = ['apcu', 'curl', 'gd', 'mbstring', 'mysqli', 'pdo_mysql', 'xml', 'zip'];
 foreach ($required as $extension) {
     if (!extension_loaded($extension)) {
         http_response_code(500);

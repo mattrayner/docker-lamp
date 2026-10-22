@@ -20,6 +20,7 @@ $passed = true;
 echo 'upload_max_filesize=' . ini_get('upload_max_filesize') . "\n";
 echo 'post_max_size=' . ini_get('post_max_size') . "\n";
 echo 'timezone=' . ini_get('date.timezone') . "\n";
+echo 'xdebug=' . (extension_loaded('xdebug') ? 'enabled' : 'disabled') . "\n";
 
 $passed = report_check('apcu', static function (): bool {
     $key = 'docker_lamp_apcu_' . bin2hex(random_bytes(8));
