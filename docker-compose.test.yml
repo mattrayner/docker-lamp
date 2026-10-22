@@ -4,6 +4,8 @@ services:
     build:
       context: .
       dockerfile: ./2204/Dockerfile
+      args:
+        PHP_ARTIFACT_IMAGE: docker-lamp-php-artifact:2204
     environment:
       MYSQL_ADMIN_PASS: test-admin-password-2204
     ports:
@@ -19,6 +21,8 @@ services:
     build:
       context: .
       dockerfile: ./2404/Dockerfile
+      args:
+        PHP_ARTIFACT_IMAGE: docker-lamp-php-artifact:2404
     environment:
       MYSQL_ADMIN_PASS: test-admin-password-2404
     ports:
@@ -34,6 +38,8 @@ services:
     build:
       context: .
       dockerfile: ./2604/Dockerfile
+      args:
+        PHP_ARTIFACT_IMAGE: docker-lamp-php-artifact:2604
     environment:
       MYSQL_ADMIN_PASS: test-admin-password-2604
     ports:

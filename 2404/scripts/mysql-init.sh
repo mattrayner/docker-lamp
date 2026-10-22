@@ -3,6 +3,7 @@ set -euo pipefail
 
 readonly MYSQL_SOCKET=/run/mysqld/mysqld.sock
 readonly MYSQL_DATADIR=/var/lib/mysql
+readonly MYSQL_CONFIG=/etc/mysql/docker-lamp.cnf
 MYSQLD_PID=''
 
 sql_string() { printf '%s' "$1" | sed "s/'/''/g"; }
@@ -40,9 +41,9 @@ if [[ -d "${MYSQL_DATADIR}/mysql" ]]; then
 fi
 
 echo "Initializing MySQL data directory"
-mysqld --initialize-insecure --user=mysql --datadir="${MYSQL_DATADIR}"
+mysqld --defaults-file="${MYSQL_CONFIG}" --initialize-insecure --user=mysql --datadir="${MYSQL_DATADIR}"
 echo "Starting temporary MySQL server for first-run setup"
-mysqld --user=mysql --datadir="${MYSQL_DATADIR}" --socket="${MYSQL_SOCKET}" \
+mysqld --defaults-file="${MYSQL_CONFIG}" --user=mysql --datadir="${MYSQL_DATADIR}" --socket="${MYSQL_SOCKET}" \
     --pid-file=/run/mysqld/mysqld-init.pid --skip-networking &
 MYSQLD_PID=$!
 trap stop_temporary_mysql EXIT

@@ -49,7 +49,7 @@ jobs:
           docker compose -f docker-compose.test.yml -p ci ps || true
           docker compose -f docker-compose.test.yml -p ci logs --no-color || true
 
-  publish:
+  publish-php-artifacts:
     needs: integration
     # Prereleases are tested but never published. Manual, push, and PR runs only test.
     if: github.event_name == 'release' && !github.event.release.prerelease && needs.integration.result == 'success'
@@ -57,9 +57,70 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ['2204', '2404', '2604']
+        include:
+          - version: '2204'
+            ubuntu_version: '22.04'
+            artifact_tag: '8.5.12-ubuntu22.04-r1'
+          - version: '2404'
+            ubuntu_version: '24.04'
+            artifact_tag: '8.5.12-ubuntu24.04-r1'
+          - version: '2604'
+            ubuntu_version: '26.04'
+            artifact_tag: '8.5.12-ubuntu26.04-r1'
+    env:
+      PHP_ARTIFACT_IMAGE_NAME: ${{ vars.DOCKERHUB_USERNAME }}/lamp-php
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and publish Ubuntu ${{ matrix.ubuntu_version }} PHP artifact
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: php-builder/Dockerfile
+          target: artifact
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            UBUNTU_VERSION=${{ matrix.ubuntu_version }}
+            PHP_VERSION=8.5.12
+          tags: ${{ env.PHP_ARTIFACT_IMAGE_NAME }}:${{ matrix.artifact_tag }}
+          sbom: true
+          provenance: mode=max
+
+  publish:
+    needs: [integration, publish-php-artifacts]
+    # Prereleases are tested but never published. Manual, push, and PR runs only test.
+    if: github.event_name == 'release' && !github.event.release.prerelease && needs.integration.result == 'success' && needs.publish-php-artifacts.result == 'success'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - version: '2204'
+            artifact_tag: '8.5.12-ubuntu22.04-r1'
+          - version: '2404'
+            artifact_tag: '8.5.12-ubuntu24.04-r1'
+          - version: '2604'
+            artifact_tag: '8.5.12-ubuntu26.04-r1'
     env:
       IMAGE_NAME: ${{ vars.DOCKERHUB_USERNAME }}/lamp
+      PHP_ARTIFACT_IMAGE_NAME: ${{ vars.DOCKERHUB_USERNAME }}/lamp-php
 
     steps:
       - name: Check out release tag
@@ -86,6 +147,7 @@ jobs:
           file: ${{ matrix.version }}/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: PHP_ARTIFACT_IMAGE=${{ env.PHP_ARTIFACT_IMAGE_NAME }}:${{ matrix.artifact_tag }}
           tags: |
             ${{ env.IMAGE_NAME }}:latest-${{ matrix.version }}-php8.5
             ${{ env.IMAGE_NAME }}:${{ github.event.release.tag_name }}-${{ matrix.version }}-php8.5

@@ -9,10 +9,10 @@ Docker-LAMP packages Apache, MySQL, and PHP in one development image. The curren
 | `latest-2204-php8.5` (planned release) | 22.04 LTS | 8.5 | 9.7 LTS | Adminer 6.1.2 at `/adminer/` | Current |
 | `latest-2404-php8.5` (planned release) | 24.04 LTS | 8.5 | 9.7 LTS | Adminer 6.1.2 at `/adminer/` | Current |
 | `latest-2604-php8.5` (planned release) | 26.04 LTS | 8.5 | 9.7 LTS | Adminer 6.1.2 at `/adminer/` | Current |
-| `latest-2004-php8` | 20.04 LTS | 8.0 | 8.0 | phpMyAdmin 5.1.1 | Legacy |
-| `latest-2004-php7` | 20.04 LTS | 7.4 | 8.0 | phpMyAdmin 5.1.1 | Legacy |
+| `latest-2004-php8` | 20.04 LTS | 8.0 | 8.0 | phpMyAdmin 5.1.1 | Unsupported legacy image |
+| `latest-2004-php7` | 20.04 LTS | 7.4 | 8.0 | phpMyAdmin 5.1.1 | Unsupported legacy image |
 
-PHP 7 is end of life and excluded from this image line. There are no PHP 7 tags for Ubuntu 22.04, 24.04, or 26.04, and no generic Ubuntu release tags; use an explicit PHP 8.5 tag.
+PHP 7 is end of life and excluded from this image line. The Ubuntu 20.04 PHP 7 and PHP 8 images are unsupported legacy images and receive no fixes or feature work. There are no PHP 7 tags for Ubuntu 22.04, 24.04, or 26.04, and no generic Ubuntu release tags; use an explicit PHP 8.5 tag.
 
 phpMyAdmin is deliberately omitted because it is not part of the PHP 8.5-compatible image stack. The PHP 8.5 images bundle the smaller MySQL-only Adminer 6.1.2 asset instead.
 
@@ -50,18 +50,25 @@ docker run --rm -p 8080:80 -p 3306:3306 \
 
 ## Development
 
-Build each supported image directly:
+The final images consume release-specific, prebuilt PHP artifacts rather than
+installing PHP during their own builds. The artifact is a separate image for
+each Ubuntu release and must use a fixed tag; floating PHP artifact tags are
+not supported.
+
+Local testing requires Docker Buildx and a `DOCKER_DEFAULT_PLATFORM` matching
+the image architecture you want to test (for example, `linux/amd64` or
+`linux/arm64`). The test runner builds the three local artifact images from
+`php-builder/Dockerfile` before it builds the Compose services:
 
 ```bash
-docker build -f 2204/Dockerfile -t docker-lamp-test:2204 .
-docker build -f 2404/Dockerfile -t docker-lamp-test:2404 .
-docker build -f 2604/Dockerfile -t docker-lamp-test:2604 .
+export DOCKER_DEFAULT_PLATFORM=linux/amd64
+./tests/test.sh
+docker compose -f docker-compose.test.yml -p ci down --volumes --remove-orphans
 ```
 
 The test Compose file builds and runs all three images concurrently on non-conflicting ports: 3020/3021 for 22.04, 3040/3041 for 24.04, and 3060/3061 for 26.04 (HTTP/MySQL respectively). Docker Compose v2 is preferred; the test runner falls back to `docker-compose` when it is the only available command.
 
 ```bash
-docker compose -f docker-compose.test.yml -p ci build
 ./tests/test.sh
 docker compose -f docker-compose.test.yml -p ci down --volumes --remove-orphans
 ```
@@ -70,19 +77,17 @@ docker compose -f docker-compose.test.yml -p ci down --volumes --remove-orphans
 
 ## Building and releasing
 
-When the releases are approved, build and test all variants before publishing their explicit tags:
+When the releases are approved, build and test all variants before publishing their explicit tags. Publish the versioned multi-architecture PHP artifacts first, then build each final image with its corresponding immutable `PHP_ARTIFACT_IMAGE` build argument:
 
 ```bash
-docker compose -f docker-compose.test.yml -p ci build
 ./tests/test.sh
 
-docker tag docker-lamp-test:2204 mattrayner/lamp:latest-2204-php8.5
-docker tag docker-lamp-test:2404 mattrayner/lamp:latest-2404-php8.5
-docker tag docker-lamp-test:2604 mattrayner/lamp:latest-2604-php8.5
+docker buildx build --platform linux/amd64,linux/arm64 --target artifact \
+  --build-arg UBUNTU_VERSION=22.04 --build-arg PHP_VERSION=8.5.12 \
+  -f php-builder/Dockerfile -t mattrayner/lamp-php:8.5.12-ubuntu22.04-r1 --push .
 
-docker push mattrayner/lamp:latest-2204-php8.5
-docker push mattrayner/lamp:latest-2404-php8.5
-docker push mattrayner/lamp:latest-2604-php8.5
+docker build --build-arg PHP_ARTIFACT_IMAGE=mattrayner/lamp-php:8.5.12-ubuntu22.04-r1 \
+  -f 2204/Dockerfile -t mattrayner/lamp:latest-2204-php8.5 .
 ```
 
 Do not create PHP 7 or generic Ubuntu release tags. Keep `latest` policy separate from these explicit PHP 8.5 release tags.

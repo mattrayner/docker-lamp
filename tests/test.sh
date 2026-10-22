@@ -7,6 +7,7 @@ source "${SCRIPT_DIR}/_helpers.sh"
 
 trap 'test_failed "$LINENO"' ERR
 
+build_php_artifacts
 start_fresh_stack
 
 for variant in "${VARIANTS[@]}"; do

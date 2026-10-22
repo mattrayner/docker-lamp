@@ -6,9 +6,11 @@ configure_php() {
     ini_contents="; Generated at container start from docker-lamp environment variables
 upload_max_filesize = ${PHP_UPLOAD_MAX_FILESIZE}
 post_max_size = ${PHP_POST_MAX_SIZE}
-date.timezone = ${PHP_TIMEZONE}"
-    printf '%s\n' "${ini_contents}" > /etc/php/8.5/apache2/conf.d/99-docker-lamp.ini
-    printf '%s\n' "${ini_contents}" > /etc/php/8.5/cli/conf.d/99-docker-lamp.ini
+date.timezone = ${PHP_TIMEZONE}
+mysqli.default_socket = /run/mysqld/mysqld.sock
+pdo_mysql.default_socket = /run/mysqld/mysqld.sock"
+    install -d -m 0755 /opt/php/etc/conf.d
+    printf '%s\n' "${ini_contents}" > /opt/php/etc/conf.d/99-docker-lamp.ini
 }
 
 configure_apache_root() {
@@ -22,10 +24,12 @@ configure_apache_root() {
 configure_mysql() {
     install -d -o mysql -g mysql -m 0755 /run/mysqld
     install -d -o mysql -g mysql -m 0750 /var/lib/mysql
+    install -d -m 0755 /etc/mysql
     chown -R mysql:mysql /var/lib/mysql
-    cat > /etc/mysql/conf.d/docker-lamp.cnf <<'EOF'
+    cat > /etc/mysql/docker-lamp.cnf <<'EOF'
 [mysqld]
 bind-address = 0.0.0.0
+datadir = /var/lib/mysql
 socket = /run/mysqld/mysqld.sock
 pid-file = /run/mysqld/mysqld.pid
 character-set-server = utf8mb4

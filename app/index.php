@@ -1,5 +1,5 @@
 <?php
-$db = new PDO('mysql:host=localhost', 'root', null);
+$db = new PDO('mysql:unix_socket=/run/mysqld/mysqld.sock', 'root', null);
 
 function getOSInformation()
  {

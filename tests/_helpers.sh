@@ -95,6 +95,32 @@ start_fresh_stack() {
     compose up --detach --build --force-recreate --renew-anon-volumes
 }
 
+build_php_artifacts() {
+    local variant os_version artifact_image
+
+    : "${DOCKER_DEFAULT_PLATFORM:?DOCKER_DEFAULT_PLATFORM must be set (for example, linux/amd64 or linux/arm64).}"
+
+    for variant in "${VARIANTS[@]}"; do
+        case "${variant}" in
+            2204) os_version='22.04' ;;
+            2404) os_version='24.04' ;;
+            2604) os_version='26.04' ;;
+            *) fail "unknown Ubuntu variant ${variant}" ;;
+        esac
+
+        artifact_image="docker-lamp-php-artifact:${variant}"
+        echo "Building ${artifact_image} for ${DOCKER_DEFAULT_PLATFORM}"
+        docker build \
+            --platform "${DOCKER_DEFAULT_PLATFORM}" \
+            --file "${PROJECT_ROOT}/php-builder/Dockerfile" \
+            --target artifact \
+            --build-arg "UBUNTU_VERSION=${os_version}" \
+            --build-arg 'PHP_VERSION=8.5.12' \
+            --tag "${artifact_image}" \
+            "${PROJECT_ROOT}"
+    done
+}
+
 web_exec() {
     compose exec -T "${SERVICE}" "$@"
 }
@@ -138,8 +164,8 @@ test_cli_php() {
     local extension
     local -a required_extensions=(apcu curl gd mbstring mysqli pdo_mysql xml zip xdebug)
 
-    echo "Checking PHP 8.5 CLI and required extensions"
-    web_exec php -r 'exit(PHP_MAJOR_VERSION === 8 && PHP_MINOR_VERSION === 5 ? 0 : 1);'
+    echo "Checking PHP >= 8.5.12 CLI and required extensions"
+    web_exec php -r 'exit(version_compare(PHP_VERSION, "8.5.12", ">=") ? 0 : 1);'
     for extension in "${required_extensions[@]}"; do
         web_exec php -m | tr '[:upper:]' '[:lower:]' | grep -Fxq "${extension}" \
             || fail "PHP CLI extension ${extension} is not loaded"
@@ -147,14 +173,20 @@ test_cli_php() {
 }
 
 test_apache_php_and_rewrite() {
-    local response
+    local response apache_php_version
 
-    echo "Checking Apache, mod_rewrite, and Apache PHP 8.5"
+    echo "Checking Apache, mod_rewrite, and Apache PHP >= 8.5.12"
     web_exec apache2ctl -M | grep -Eq 'rewrite_module.*shared'
 
     response=$(curl --fail --silent --show-error --max-time 10 \
         "http://127.0.0.1:${WEB_PORT}/rewrite-check/php85")
-    [[ "${response}" == *"php=8.5."* ]] || fail "Apache did not execute PHP 8.5"
+    if [[ "${response}" =~ php=([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+        apache_php_version=${BASH_REMATCH[1]}
+    else
+        fail "Apache did not report its PHP version"
+    fi
+    web_exec php -r 'exit(version_compare($argv[1], "8.5.12", ">=") ? 0 : 1);' "${apache_php_version}" \
+        || fail "Apache did not execute PHP >= 8.5.12 (reported ${apache_php_version})"
     [[ "${response}" == *"extensions=ok"* ]] || fail "Apache PHP extensions are not loaded"
 }
 
